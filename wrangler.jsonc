@@ -15,7 +15,7 @@
     {
       "binding": "DB",
       "database_name": "gcs2-db",
-      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID",
+      "database_id": "7176a538-4125-4545-a1a6-6a2518588911",
       "migrations_dir": "migrations"
     }
   ],
