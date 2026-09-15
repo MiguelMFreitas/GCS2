@@ -154,3 +154,16 @@ export async function updateMaintenance(request, env, user, id) {
     return Response.json({ error: 'Erro ao atualizar manutenção.' }, { status: 500 });
   }
 }
+
+export async function deleteMaintenance(request, env, user, id) {
+  try {
+    const existing = await get(env.DB, 'SELECT * FROM maintenance_records WHERE id = ?', [id]);
+    if (!existing) {
+      return Response.json({ error: 'Registro de manutenção não encontrado.' }, { status: 404 });
+    }
+    await run(env.DB, 'DELETE FROM maintenance_records WHERE id = ?', [id]);
+    return Response.json({ message: 'Registro de manutenção removido com sucesso.' });
+  } catch (err) {
+    return Response.json({ error: 'Erro ao remover manutenção.' }, { status: 500 });
+  }
+}

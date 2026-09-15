@@ -59,11 +59,13 @@ router.delete('/expenses/:id', expenseController.deleteExpense);
 router.get('/maintenance', maintenanceController.listMaintenance);
 router.post('/maintenance', maintenanceController.createMaintenance);
 router.put('/maintenance/:id', maintenanceController.updateMaintenance);
+router.delete('/maintenance/:id', maintenanceController.deleteMaintenance);
 
 // Reminders
 router.get('/reminders', reminderController.listReminders);
 router.post('/reminders', reminderController.createReminder);
 router.patch('/reminders/:id/status', reminderController.updateReminderStatus);
+router.delete('/reminders/:id', reminderController.deleteReminder);
 
 // Documents
 router.get('/documents', documentController.listDocuments);

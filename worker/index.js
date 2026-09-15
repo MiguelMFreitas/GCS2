@@ -208,8 +208,9 @@ async function handleApiRoute(request, env, pathname, method) {
     return await maintenanceRoute.createMaintenance(request, env, user);
   }
   match = pathname.match(/^\/api\/maintenance\/(\d+)$/);
-  if (match && method === 'PUT') {
-    return await maintenanceRoute.updateMaintenance(request, env, user, match[1]);
+  if (match) {
+    if (method === 'PUT') return await maintenanceRoute.updateMaintenance(request, env, user, match[1]);
+    if (method === 'DELETE') return await maintenanceRoute.deleteMaintenance(request, env, user, match[1]);
   }
 
   // --- Reminders Routes ---
@@ -222,6 +223,10 @@ async function handleApiRoute(request, env, pathname, method) {
   match = pathname.match(/^\/api\/reminders\/(\d+)\/status$/);
   if (match && method === 'PATCH') {
     return await reminderRoute.updateReminderStatus(request, env, user, match[1]);
+  }
+  match = pathname.match(/^\/api\/reminders\/(\d+)$/);
+  if (match && method === 'DELETE') {
+    return await reminderRoute.deleteReminder(request, env, user, match[1]);
   }
 
   // --- Documents Routes ---

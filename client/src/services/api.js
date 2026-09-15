@@ -74,12 +74,14 @@ export const maintenanceService = {
   list: (params) => api.get('/maintenance', { params }),
   create: (data) => api.post('/maintenance', data),
   update: (id, data) => api.put(`/maintenance/${id}`, data),
+  delete: (id) => api.delete(`/maintenance/${id}`),
 };
 
 export const reminderService = {
   list: (params) => api.get('/reminders', { params }),
   create: (data) => api.post('/reminders', data),
   updateStatus: (id, data) => api.patch(`/reminders/${id}/status`, data),
+  delete: (id) => api.delete(`/reminders/${id}`),
 };
 
 export const documentService = {

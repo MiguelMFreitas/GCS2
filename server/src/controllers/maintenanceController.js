@@ -145,3 +145,17 @@ export function updateMaintenance(req, res) {
     return res.status(500).json({ error: 'Erro ao atualizar manutenção.' });
   }
 }
+
+export function deleteMaintenance(req, res) {
+  try {
+    const { id } = req.params;
+    const existing = get('SELECT * FROM maintenance_records WHERE id = ?', [id]);
+    if (!existing) {
+      return res.status(404).json({ error: 'Registro de manutenção não encontrado.' });
+    }
+    run('DELETE FROM maintenance_records WHERE id = ?', [id]);
+    return res.json({ message: 'Registro de manutenção removido com sucesso.' });
+  } catch (err) {
+    return res.status(500).json({ error: 'Erro ao remover manutenção.' });
+  }
+}
