@@ -1,0 +1,26 @@
+{
+  "name": "gcs2-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "seed": "cd server && npm run seed",
+    "build:client": "cd client && npm run build",
+    "build": "npm run build:client",
+    "dev:worker": "npm run build:client && wrangler dev",
+    "deploy": "npm run build:client && wrangler deploy",
+    "d1:create": "wrangler d1 create gcs2-db",
+    "d1:migrate": "wrangler d1 migrations apply gcs2-db --remote",
+    "d1:migrate:local": "wrangler d1 migrations apply gcs2-db --local",
+    "r2:create": "wrangler r2 bucket create gcs2-storage"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "wrangler": "^3.78.0"
+  }
+}
