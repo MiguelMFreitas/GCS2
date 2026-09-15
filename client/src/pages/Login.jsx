@@ -53,7 +53,7 @@ export default function Login() {
             <Fuel className="w-9 h-9 text-slate-950 stroke-[2.5]" />
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-            GCS<span className="text-emerald-400">2</span> Frota
+            Gerenciamento de Frota
           </h1>
           <p className="text-xs sm:text-sm text-slate-400">
             Controle de Abastecimento, Consumo e Gestão de Frota
@@ -151,7 +151,7 @@ export default function Login() {
 
         {/* Footer info */}
         <p className="text-center text-xs text-slate-500">
-          GCS2 Gestão Operacional de Frota &copy; 2026 • Todos os direitos reservados
+          Gerenciamento de Frota &copy; 2026 • Todos os direitos reservados
         </p>
       </div>
 

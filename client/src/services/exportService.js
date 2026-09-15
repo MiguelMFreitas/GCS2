@@ -1,7 +1,69 @@
-import jsPDF from 'jspdf';
+import jsPDFModule from 'jspdf';
 import * as XLSX from 'xlsx';
 
-export function generateSessionPDF(session, records = [], summary) {
+const jsPDF = jsPDFModule.jsPDF || jsPDFModule;
+
+// ==============================================================================
+// Brazilian Formatting Utilities
+// ==============================================================================
+export function formatCurrency(value) {
+  if (value === null || value === undefined || isNaN(value)) return 'R$ 0,00';
+  return `R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+export function formatLiters(value) {
+  if (value === null || value === undefined || isNaN(value)) return '0,00 L';
+  return `${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} L`;
+}
+
+export function formatKm(value) {
+  if (value === null || value === undefined || isNaN(value)) return '-';
+  return `${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km`;
+}
+
+export function formatConsumption(value) {
+  if (value === null || value === undefined || isNaN(value)) return 'Sem dados';
+  return `${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km/L`;
+}
+
+export function formatDateBR(dateStr) {
+  if (!dateStr) return new Date().toLocaleDateString('pt-BR');
+  if (dateStr.includes('T')) {
+    const [d] = dateStr.split('T');
+    return d.split('-').reverse().join('/');
+  }
+  if (dateStr.includes('-')) {
+    return dateStr.split('-').reverse().join('/');
+  }
+  return dateStr;
+}
+
+// Compute fuel summary grouped strictly by actual fuel used (No 'Flex' allowed - Item 39)
+function computeFuelSummary(records, providedSummary) {
+  if (providedSummary?.fuels && providedSummary.fuels.length > 0) {
+    return providedSummary.fuels.map(f => ({
+      ...f,
+      name: f.name?.toUpperCase() === 'FLEX' ? 'Gasolina' : f.name
+    }));
+  }
+  const map = {};
+  for (const r of records) {
+    let fuel = r.fuel_type || 'Diesel S10';
+    if (fuel.toUpperCase() === 'FLEX') fuel = 'Gasolina';
+    if (!map[fuel]) {
+      map[fuel] = { name: fuel, count: 0, liters: 0, total_cost: 0 };
+    }
+    map[fuel].count += 1;
+    map[fuel].liters += Number(r.liters || 0);
+    map[fuel].total_cost += Number(r.total_cost || 0);
+  }
+  return Object.values(map);
+}
+
+// ==============================================================================
+// Master PDF Generator Engine (Corporate Fleet Executive Theme)
+// ==============================================================================
+export function createFleetPDFDoc({ title = 'RELATÓRIO DE ABASTECIMENTO', sessionCode, dateStr, records = [], summary = {} }) {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -10,190 +72,216 @@ export function generateSessionPDF(session, records = [], summary) {
 
   const pageWidth = 210;
   const pageHeight = 297;
-  const margin = 14;
+  const margin = 12;
   const contentWidth = pageWidth - (margin * 2);
 
-  // Corporate Color Palette
-  const darkNavy = [15, 23, 42];      // #0f172a
-  const slateBorder = [203, 213, 225]; // #cbd5e1
-  const bgCard = [248, 250, 252];      // #f8fafc
-  const textMuted = [100, 116, 139];   // #64748b
-  const textDark = [15, 23, 42];
-  const emeraldBrand = [22, 163, 74];  // #16a34a
-  const blueBrand = [2, 132, 199];     // #0284c7
+  // Executive Color Palette
+  const darkNavy = [15, 23, 42];        // #0f172a
+  const slateBorder = [226, 232, 240];  // #e2e8f0
+  const bgCard = [248, 250, 252];       // #f8fafc
+  const textMuted = [100, 116, 139];    // #64748b
+  const textDark = [15, 23, 42];        // #0f172a
+  const emeraldBrand = [5, 150, 105];   // #059669
+  const blueBrand = [2, 132, 199];      // #0284c7
+  const amberWarning = [217, 119, 6];   // #d97706
 
-  const formattedDate = session.date ? session.date.split('-').reverse().join('/') : new Date().toLocaleDateString('pt-BR');
-  let yPos = 14;
+  const formattedDate = formatDateBR(dateStr);
+  let yPos = 12;
 
   // Helper for adding new page with header
   function checkPageBreak(neededHeight) {
     if (yPos + neededHeight > pageHeight - 16) {
       doc.addPage();
-      yPos = 16;
+      yPos = 12;
       drawPageHeaderMini();
     }
   }
 
   function drawPageHeaderMini() {
     doc.setFillColor(...darkNavy);
-    doc.rect(margin, yPos, contentWidth, 8, 'F');
+    doc.roundedRect(margin, yPos, contentWidth, 8, 1.5, 1.5, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
-    doc.text(`GCS2 • RELATÓRIO DE ABASTECIMENTO • SESSÃO: ${session.code} • ${formattedDate}`, margin + 4, yPos + 5.5);
-    yPos += 12;
+    doc.text('GERENCIAMENTO DE FROTA • RELATORIO DE ABASTECIMENTO', margin + 4, yPos + 5.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(203, 213, 225);
+    doc.text(`${sessionCode ? `Sessao: ${sessionCode}  •  ` : ''}${formattedDate}`, pageWidth - margin - 4, yPos + 5.5, { align: 'right' });
+    yPos += 13;
   }
 
-  // ==========================================
-  // 1. TOP HEADER (Item 11)
-  // ==========================================
+  // ==============================================================================
+  // 1. TOP HEADER (First Page)
+  // ==============================================================================
   doc.setFillColor(...darkNavy);
-  doc.roundedRect(margin, yPos, contentWidth, 26, 3, 3, 'F');
+  doc.roundedRect(margin, yPos, contentWidth, 24, 2.5, 2.5, 'F');
 
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(15);
+  doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
-  doc.text('RELATÓRIO DE ABASTECIMENTO', margin + 6, yPos + 10);
+  doc.text('GERENCIAMENTO DE FROTA', margin + 6, yPos + 9);
 
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(148, 163, 184);
-  doc.text(`Sessão: ${session.code}  •  Sistema de Gestão de Frota GCS2`, margin + 6, yPos + 18);
-
-  // Right Header Meta
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(255, 255, 255);
-  doc.text(`Data: ${formattedDate}`, pageWidth - margin - 6, yPos + 10, { align: 'right' });
-  doc.setTextColor(74, 222, 128); // Emerald light
-  doc.text(`Quantidade de veículos: ${summary?.total_vehicles || records.length}`, pageWidth - margin - 6, yPos + 18, { align: 'right' });
-
-  yPos += 31;
-
-  // ==========================================
-  // 2. RESUMO GERAL (Item 12: 3 Cards/Blocos)
-  // ==========================================
-  const colWidth = (contentWidth - 8) / 3;
-
-  // Card 1: Total de Veículos
-  doc.setFillColor(...bgCard);
-  doc.setDrawColor(...slateBorder);
-  doc.roundedRect(margin, yPos, colWidth, 20, 2, 2, 'FD');
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...textMuted);
-  doc.text('TOTAL DE VEÍCULOS', margin + 5, yPos + 6);
-  doc.setFontSize(13);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...textDark);
-  doc.text(`${summary?.total_vehicles || records.length} veículos`, margin + 5, yPos + 15);
-
-  // Card 2: Total de Litros
-  doc.setFillColor(...bgCard);
-  doc.roundedRect(margin + colWidth + 4, yPos, colWidth, 20, 2, 2, 'FD');
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...textMuted);
-  doc.text('TOTAL DE LITROS', margin + colWidth + 9, yPos + 6);
-  doc.setFontSize(13);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...blueBrand);
-  doc.text(`${Number(summary?.total_liters || session.total_liters || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} L`, margin + colWidth + 9, yPos + 15);
-
-  // Card 3: Valor Total (Destacado)
-  doc.setFillColor(240, 253, 244); // Emerald 50
-  doc.setDrawColor(187, 247, 208);
-  doc.roundedRect(margin + (colWidth * 2) + 8, yPos, colWidth, 20, 2, 2, 'FD');
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(21, 128, 61);
-  doc.text('VALOR TOTAL PAGO', margin + (colWidth * 2) + 13, yPos + 6);
-  doc.setFontSize(13);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...emeraldBrand);
-  doc.text(`R$ ${Number(summary?.total_cost || session.total_cost || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, margin + (colWidth * 2) + 13, yPos + 15);
-
-  yPos += 25;
-
-  // ==========================================
-  // 3. SEPARAR POR COMBUSTÍVEL (Item 13)
-  // ==========================================
-  const fuels = summary?.fuels || [];
-  if (fuels.length > 0) {
-    const fuelCardWidth = (contentWidth - ((fuels.length - 1) * 4)) / fuels.length;
-
-    fuels.forEach((fuel, idx) => {
-      const isGasolina = fuel.name.toUpperCase().includes('GASOLINA');
-      const isDiesel = fuel.name.toUpperCase().includes('DIESEL');
-      const xCard = margin + (idx * (fuelCardWidth + 4));
-
-      doc.setFillColor(isDiesel ? 240 : (isGasolina ? 240 : 254), isDiesel ? 253 : (isGasolina ? 249 : 243), isDiesel ? 244 : (isGasolina ? 255 : 199));
-      doc.setDrawColor(...slateBorder);
-      doc.roundedRect(xCard, yPos, fuelCardWidth, 24, 2, 2, 'FD');
-
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(isDiesel ? 22 : (isGasolina ? 2 : 180), isDiesel ? 101 : (isGasolina ? 132 : 83), isDiesel ? 52 : (isGasolina ? 199 : 9));
-      doc.text(`${isDiesel ? '🚚' : (isGasolina ? '⛽' : '🌿')} ${fuel.name.toUpperCase()}`, xCard + 4, yPos + 7);
-
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(...textDark);
-      doc.text(`${fuel.count} ${fuel.count === 1 ? 'veículo' : 'veículos'}  •  ${Number(fuel.liters).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} litros`, xCard + 4, yPos + 13);
-      doc.text(`Preço médio: R$ ${Number(fuel.avg_price_per_liter).toFixed(2)}/L`, xCard + 4, yPos + 18);
-
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...emeraldBrand);
-      doc.text(`R$ ${Number(fuel.total_cost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, xCard + fuelCardWidth - 4, yPos + 18, { align: 'right' });
-    });
-
-    yPos += 29;
-  }
-
-  // ==========================================
-  // 4. TOTAL DO ABASTECIMENTO (Item 14: Super Destacado)
-  // ==========================================
-  doc.setFillColor(...darkNavy);
-  doc.setDrawColor(30, 41, 59);
-  doc.roundedRect(margin, yPos, contentWidth, 22, 3, 3, 'FD');
-
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.text('TOTAL DO ABASTECIMENTO', margin + 6, yPos + 8);
-
-  // Fuel breakdown summary text
-  const fuelSummaryLine = fuels.map(f => `${f.name}: ${Number(f.liters).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} L — R$ ${Number(f.total_cost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`).join('   |   ');
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
   doc.setTextColor(203, 213, 225);
-  doc.text(fuelSummaryLine || `Total Litros: ${summary?.total_liters} L`, margin + 6, yPos + 16);
+  doc.text(title || 'Relatorio de Abastecimento', margin + 6, yPos + 17);
 
-  // Big Highlight Total on the Right
-  doc.setFontSize(8);
+  // Right Header Info
+  doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(74, 222, 128);
-  doc.text('VALOR TOTAL PAGO:', pageWidth - margin - 6, yPos + 8, { align: 'right' });
-  doc.setFontSize(13);
-  doc.setTextColor(74, 222, 128);
-  doc.text(`R$ ${Number(summary?.total_cost || session.total_cost || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, pageWidth - margin - 6, yPos + 16, { align: 'right' });
+  doc.setTextColor(255, 255, 255);
+  doc.text(`Data: ${formattedDate}`, pageWidth - margin - 6, yPos + 9, { align: 'right' });
+
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(110, 231, 183); // Light emerald
+  const totalVehiclesCount = summary?.total_vehicles || records.length || 0;
+  const sessionText = sessionCode ? `Sessao: ${sessionCode} • ` : '';
+  doc.text(`${sessionText}${totalVehiclesCount} ${totalVehiclesCount === 1 ? 'veiculo abastecido' : 'veiculos abastecidos'}`, pageWidth - margin - 6, yPos + 17, { align: 'right' });
 
   yPos += 28;
 
-  // ==========================================
-  // 5. DADOS DE CADA VEÍCULO EM CARDS (Items 15 & 16)
-  // ==========================================
-  doc.setFontSize(10);
+  // ==============================================================================
+  // 2. EXECUTIVE SUMMARY: 3 CARDS
+  // ==============================================================================
+  const colWidth = (contentWidth - 8) / 3;
+  const totalLitersVal = Number(summary?.total_liters || 0);
+  const totalCostVal = Number(summary?.total_cost || 0);
+
+  // Card 1: Veículos Abastecidos
+  doc.setFillColor(...bgCard);
+  doc.setDrawColor(...slateBorder);
+  doc.roundedRect(margin, yPos, colWidth, 18, 2, 2, 'FD');
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...textMuted);
+  doc.text('VEICULOS ABASTECIDOS', margin + 4, yPos + 5.5);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...textDark);
+  doc.text(`${totalVehiclesCount}`, margin + 4, yPos + 13.5);
+
+  // Card 2: Total de Litros
+  doc.setFillColor(...bgCard);
+  doc.setDrawColor(...slateBorder);
+  doc.roundedRect(margin + colWidth + 4, yPos, colWidth, 18, 2, 2, 'FD');
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...textMuted);
+  doc.text('TOTAL DE LITROS', margin + colWidth + 8, yPos + 5.5);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...blueBrand);
+  doc.text(formatLiters(totalLitersVal), margin + colWidth + 8, yPos + 13.5);
+
+  // Card 3: Valor Total (Destacado em Verde Executivo)
+  doc.setFillColor(236, 253, 245); // Emerald 50
+  doc.setDrawColor(167, 243, 208); // Emerald 200
+  doc.roundedRect(margin + (colWidth * 2) + 8, yPos, colWidth, 18, 2, 2, 'FD');
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(6, 95, 70); // Emerald 800
+  doc.text('VALOR TOTAL', margin + (colWidth * 2) + 12, yPos + 5.5);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...emeraldBrand);
+  doc.text(formatCurrency(totalCostVal), margin + (colWidth * 2) + 12, yPos + 13.5);
+
+  yPos += 22;
+
+  // ==============================================================================
+  // 3. RESUMO POR COMBUSTÍVEL
+  // ==============================================================================
+  const fuels = computeFuelSummary(records, summary);
+  if (fuels.length > 0) {
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...darkNavy);
+    doc.text('RESUMO POR COMBUSTIVEL', margin, yPos);
+    yPos += 3.5;
+
+    const fuelCardCount = Math.min(fuels.length, 3);
+    const fuelCardWidth = (contentWidth - ((fuelCardCount - 1) * 4)) / fuelCardCount;
+
+    fuels.forEach((fuel, idx) => {
+      const isDiesel = fuel.name.toUpperCase().includes('DIESEL');
+      const isGasolina = fuel.name.toUpperCase().includes('GASOLINA');
+      const xCard = margin + (idx * (fuelCardWidth + 4));
+
+      doc.setFillColor(...bgCard);
+      doc.setDrawColor(...slateBorder);
+      doc.roundedRect(xCard, yPos, fuelCardWidth, 20, 2, 2, 'FD');
+
+      // Fuel Name Header
+      doc.setFontSize(8.5);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(isDiesel ? 22 : (isGasolina ? 2 : 180), isDiesel ? 101 : (isGasolina ? 132 : 83), isDiesel ? 52 : (isGasolina ? 199 : 9));
+      doc.text(fuel.name.toUpperCase(), xCard + 4, yPos + 6);
+
+      // Vehicles & Liters
+      doc.setFontSize(7.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...textDark);
+      doc.text(`${fuel.count} ${fuel.count === 1 ? 'veiculo' : 'veiculos'}  •  ${formatLiters(fuel.liters)}`, xCard + 4, yPos + 11.5);
+
+      // Subtotal Cost
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...emeraldBrand);
+      doc.text(`${formatCurrency(fuel.total_cost)} gastos`, xCard + 4, yPos + 16.5);
+    });
+
+    yPos += 24;
+  }
+
+  // ==============================================================================
+  // 4. TOTAL DO ABASTECIMENTO (Destaque Consolidado)
+  // ==============================================================================
+  doc.setFillColor(...darkNavy);
+  doc.setDrawColor(30, 41, 59);
+  doc.roundedRect(margin, yPos, contentWidth, 19, 2.5, 2.5, 'FD');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.text('TOTAL DO ABASTECIMENTO', margin + 6, yPos + 7);
+
+  // Fuel breakdown summary text
+  const fuelSummaryLine = fuels.map(f => `${f.name}: ${formatLiters(f.liters)} — ${formatCurrency(f.total_cost)}`).join('   |   ');
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(203, 213, 225);
+  doc.text(fuelSummaryLine || `Total de Litros: ${formatLiters(totalLitersVal)}`, margin + 6, yPos + 14);
+
+  // Right Total
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(110, 231, 183);
+  doc.text('VALOR TOTAL:', pageWidth - margin - 6, yPos + 7, { align: 'right' });
+  doc.setFontSize(12);
+  doc.setTextColor(110, 231, 183);
+  doc.text(formatCurrency(totalCostVal), pageWidth - margin - 6, yPos + 14.5, { align: 'right' });
+
+  yPos += 24;
+
+  // ==============================================================================
+  // 5. DETALHAMENTO POR VEÍCULO EM CARDS INDIVIDUAIS
+  // ==============================================================================
+  doc.setFontSize(9.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...darkNavy);
-  doc.text(`DETALHAMENTO POR VEÍCULO (${records.length} VEÍCULOS ABASTECIDOS)`, margin, yPos);
+  doc.text(`DETALHAMENTO POR VEICULO (${records.length} VEICULOS ABASTECIDOS)`, margin, yPos);
   yPos += 4;
 
   records.forEach((r, idx) => {
-    const isOdometerWorking = r.odometer_working === 1;
-    const cardHeight = isOdometerWorking ? 36 : 28;
+    const isOdometerWorking = r.odometer_working === 1 || r.odometer_working === true || r.odometer_working === '1';
+    const hasPreviousKm = r.km_previous !== null && r.km_previous !== undefined && r.km_previous !== '' && Number(r.km_previous) > 0;
+    
+    // Dynamic height calculation
+    const isSpecialCase = !isOdometerWorking || !hasPreviousKm;
+    const cardHeight = isSpecialCase ? 29 : 32;
 
-    checkPageBreak(cardHeight + 4);
+    checkPageBreak(cardHeight + 3);
 
     // Vehicle Card Container
     doc.setFillColor(...bgCard);
@@ -202,141 +290,252 @@ export function generateSessionPDF(session, records = [], summary) {
 
     // Card Header Bar
     doc.setFillColor(241, 245, 249);
-    doc.roundedRect(margin, yPos, contentWidth, 9, 2, 2, 'F');
-    doc.rect(margin, yPos + 6, contentWidth, 3, 'F'); // square bottom of header
+    doc.roundedRect(margin, yPos, contentWidth, 7.5, 2, 2, 'F');
+    doc.rect(margin, yPos + 4.5, contentWidth, 3, 'F'); // flatten bottom
 
-    // Vehicle Name & Number
-    doc.setFontSize(9);
+    // Vehicle Number and Name
+    doc.setFontSize(8.5);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...darkNavy);
-    doc.text(`${idx + 1}. ${r.vehicle_name || 'Veículo'}`, margin + 4, yPos + 6);
+    const vehicleNum = String(idx + 1).padStart(2, '0');
+    doc.text(`${vehicleNum} — ${(r.vehicle_name || 'VEICULO').toUpperCase()}`, margin + 4, yPos + 5.2);
 
-    // License Plate Badge
+    // Plate
     doc.setFontSize(8);
-    doc.setFont('courier', 'bold');
-    doc.text(`[ ${r.vehicle_plate || '-'} ]`, margin + 65, yPos + 6);
-
-    // Fuel Type & Cost
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('helvetica', 'bold');
     doc.setTextColor(...textMuted);
-    doc.text(`Combustível: ${r.fuel_type || 'Diesel'}`, margin + 110, yPos + 6);
+    doc.text(`Placa: ${r.vehicle_plate || '-'}`, margin + 68, yPos + 5.2);
 
+    // Fuel Type
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Combustivel: ${r.fuel_type || 'Diesel'}`, margin + 110, yPos + 5.2);
+
+    // Cost on Right
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...emeraldBrand);
-    doc.text(`R$ ${Number(r.total_cost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, pageWidth - margin - 4, yPos + 6, { align: 'right' });
+    doc.text(formatCurrency(r.total_cost), pageWidth - margin - 4, yPos + 5.2, { align: 'right' });
 
-    // Card Body Metrics Grid
-    if (isOdometerWorking) {
-      // Row 1: KM Info
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(...textMuted);
-      doc.text('KM Anterior:', margin + 4, yPos + 15);
-      doc.setTextColor(...textDark);
-      doc.text(r.km_previous ? `${Number(r.km_previous).toLocaleString('pt-BR')} km` : '-', margin + 28, yPos + 15);
+    // Card Content Columns
+    const yBody = yPos + 11.5;
 
-      doc.setTextColor(...textMuted);
-      doc.text('KM Atual:', margin + 65, yPos + 15);
-      doc.setTextColor(...textDark);
-      doc.text(r.km_current ? `${Number(r.km_current).toLocaleString('pt-BR')} km` : '-', margin + 83, yPos + 15);
+    // --- Sub-block 1: QUILOMETRAGEM ---
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...textMuted);
+    doc.text('QUILOMETRAGEM', margin + 4, yBody);
 
-      doc.setTextColor(...textMuted);
-      doc.text('KM Rodados:', margin + 125, yPos + 15);
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...textDark);
+    if (!isOdometerWorking) {
+      doc.text('Anterior: -', margin + 4, yBody + 5);
+      doc.text('Atual: -', margin + 4, yBody + 9.5);
+      doc.text('Rodados: -', margin + 4, yBody + 14);
+    } else if (!hasPreviousKm) {
+      doc.text('Anterior: - (Primeiro)', margin + 4, yBody + 5);
+      doc.text(`Atual: ${formatKm(r.km_current)}`, margin + 4, yBody + 9.5);
+      doc.text('Rodados: -', margin + 4, yBody + 14);
+    } else {
+      doc.text(`Anterior: ${formatKm(r.km_previous)}`, margin + 4, yBody + 5);
+      doc.text(`Atual: ${formatKm(r.km_current)}`, margin + 4, yBody + 9.5);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...blueBrand);
-      doc.text(r.km_driven ? `${Number(r.km_driven).toLocaleString('pt-BR')} km` : '-', margin + 148, yPos + 15);
-
-      // Row 2: Fueling & Prices
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(...textMuted);
-      doc.text('Litros:', margin + 4, yPos + 23);
-      doc.setTextColor(...textDark);
-      doc.text(`${Number(r.liters).toFixed(2)} L`, margin + 28, yPos + 23);
-
-      doc.setTextColor(...textMuted);
-      doc.text('Valor/Litro:', margin + 65, yPos + 23);
-      doc.setTextColor(...textDark);
-      doc.text(`R$ ${Number(r.price_per_liter).toFixed(2)}`, margin + 83, yPos + 23);
-
-      doc.setTextColor(...textMuted);
-      doc.text('Valor Pago:', margin + 125, yPos + 23);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...emeraldBrand);
-      doc.text(`R$ ${Number(r.total_cost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, margin + 148, yPos + 23);
-
-      // Row 3: Consumption & Cost per KM
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(...textMuted);
-      doc.text('Consumo Médio:', margin + 4, yPos + 31);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...emeraldBrand);
-      doc.text(r.consumption_kml ? `${Number(r.consumption_kml).toFixed(2)} km/L` : 'Não calculado', margin + 28, yPos + 31);
-
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(...textMuted);
-      doc.text('Custo por KM:', margin + 65, yPos + 31);
-      doc.setTextColor(...textDark);
-      doc.text(r.cost_per_km ? `R$ ${Number(r.cost_per_km).toFixed(2)}/km` : '-', margin + 88, yPos + 31);
-
-      if (r.driver_name) {
-        doc.setTextColor(...textMuted);
-        doc.text(`Motorista: ${r.driver_name}`, margin + 125, yPos + 31);
-      }
-    } else {
-      // Non-working odometer vehicle (Item 16)
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(...textMuted);
-      doc.text('Litros:', margin + 4, yPos + 16);
-      doc.setTextColor(...textDark);
-      doc.text(`${Number(r.liters).toFixed(2)} L`, margin + 22, yPos + 16);
-
-      doc.setTextColor(...textMuted);
-      doc.text('Valor por Litro:', margin + 60, yPos + 16);
-      doc.setTextColor(...textDark);
-      doc.text(`R$ ${Number(r.price_per_liter).toFixed(2)}`, margin + 85, yPos + 16);
-
-      doc.setTextColor(...textMuted);
-      doc.text('Valor Abastecido:', margin + 125, yPos + 16);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...emeraldBrand);
-      doc.text(`R$ ${Number(r.total_cost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, margin + 155, yPos + 16);
-
-      // Warning badge: Consumo não calculado — odômetro não funcional
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(217, 119, 6); // Amber
-      doc.text('⚠️ Consumo não calculado — odômetro não funcional.', margin + 4, yPos + 24);
+      doc.text(`Rodados: ${formatKm(r.km_driven)}`, margin + 4, yBody + 14);
     }
 
-    yPos += cardHeight + 4;
+    // --- Sub-block 2: ABASTECIMENTO ---
+    const xCol2 = margin + 65;
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...textMuted);
+    doc.text('ABASTECIMENTO', xCol2, yBody);
+
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...textDark);
+    doc.text(`Litros: ${formatLiters(r.liters)}`, xCol2, yBody + 5);
+    doc.text(`Valor/L: R$ ${Number(r.price_per_liter || 0).toFixed(2)}`, xCol2, yBody + 9.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...emeraldBrand);
+    doc.text(`Total: ${formatCurrency(r.total_cost)}`, xCol2, yBody + 14);
+
+    // --- Sub-block 3: DESEMPENHO ---
+    const xCol3 = margin + 120;
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...textMuted);
+    doc.text('DESEMPENHO', xCol3, yBody);
+
+    if (!isOdometerWorking) {
+      doc.setFontSize(7.5);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...amberWarning);
+      doc.text('Consumo nao calculado', xCol3, yBody + 5.5);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...textMuted);
+      doc.text('Odometro deste veiculo esta marcado como nao funcional.', xCol3, yBody + 10);
+    } else if (!hasPreviousKm) {
+      doc.setFontSize(7.5);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...blueBrand);
+      doc.text('Consumo ainda nao disponivel', xCol3, yBody + 5.5);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...textMuted);
+      doc.text('Necessario abastecimento anterior para calcular a media.', xCol3, yBody + 10);
+    } else {
+      doc.setFontSize(7.5);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...emeraldBrand);
+      doc.text(`Consumo medio: ${formatConsumption(r.consumption_kml)}`, xCol3, yBody + 5);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...textDark);
+      doc.text(`Custo/km: ${r.cost_per_km ? `R$ ${Number(r.cost_per_km).toFixed(2)}/km` : '-'}`, xCol3, yBody + 9.5);
+
+      if (r.driver_name) {
+        doc.setFontSize(7);
+        doc.setTextColor(...textMuted);
+        doc.text(`Motorista: ${r.driver_name}`, xCol3, yBody + 14);
+      }
+    }
+
+    yPos += cardHeight + 3.5;
   });
 
-  // ==========================================
-  // Footer Page Numbers
-  // ==========================================
-  const pageCount = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
+  // ==============================================================================
+  // 6. FOOTER NUMBERS ON ALL PAGES
+  // ==============================================================================
+  const totalPages = doc.internal.getNumberOfPages();
+  const generationTime = new Date().toLocaleDateString('pt-BR') + ' as ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+  for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
-    doc.setFontSize(8);
+    doc.setDrawColor(226, 232, 240);
+    doc.line(margin, pageHeight - 10, pageWidth - margin, pageHeight - 10);
+
+    doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(148, 163, 184);
-    doc.text(
-      `GCS2 Gestão de Frota • Relatório gerado em ${new Date().toLocaleString('pt-BR')} • Página ${i} de ${pageCount}`,
-      margin,
-      pageHeight - 8
-    );
+    doc.text(`Gerenciamento de Frota • Relatorio gerado em ${generationTime}`, margin, pageHeight - 6.5);
+    doc.text(`Pagina ${i} de ${totalPages}`, pageWidth - margin, pageHeight - 6.5, { align: 'right' });
   }
 
-  doc.save(`Relatorio_Abastecimento_${session.code}.pdf`);
+  return doc;
 }
 
+// ==============================================================================
+// Output Dispatchers (Download, View in New Tab/Safari, Web Share)
+// ==============================================================================
+export function downloadPDF(doc, filename) {
+  doc.save(filename);
+}
+
+export function openPDFInViewer(doc, filename) {
+  const blob = doc.output('blob');
+  const blobUrl = URL.createObjectURL(blob);
+  window.open(blobUrl, '_blank');
+}
+
+export async function sharePDF(doc, filename, title = 'Relatório de Abastecimento - Gerenciamento de Frota') {
+  const blob = doc.output('blob');
+  const file = new File([blob], filename, { type: 'application/pdf' });
+
+  if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({
+        title,
+        text: 'Segue em anexo o relatório de abastecimento da frota.',
+        files: [file]
+      });
+      return { success: true, method: 'share' };
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.error('Erro ao compartilhar:', err);
+      }
+    }
+  }
+
+  // Fallback if not supported or canceled
+  doc.save(filename);
+  return { success: true, method: 'download' };
+}
+
+// ==============================================================================
+// High-Level Session & Fleet PDF Generation Functions
+// ==============================================================================
+export function generateSessionPDF(session, records = [], summary = {}, action = 'download') {
+  const dateFormatted = session.date ? session.date.replace(/-/g, '_') : new Date().toISOString().split('T')[0];
+  const filename = `Gerenciamento_Frota_Abastecimento_${session.code || dateFormatted}.pdf`;
+
+  const doc = createFleetPDFDoc({
+    title: 'RELATORIO DE ABASTECIMENTO',
+    sessionCode: session.code,
+    dateStr: session.date,
+    records,
+    summary: {
+      total_vehicles: summary.total_vehicles || records.length,
+      total_liters: summary.total_liters || session.total_liters,
+      total_cost: summary.total_cost || session.total_cost,
+      fuels: summary.fuels
+    }
+  });
+
+  if (action === 'view') {
+    openPDFInViewer(doc, filename);
+  } else if (action === 'share') {
+    return sharePDF(doc, filename, `Relatório da Sessão ${session.code}`);
+  } else {
+    downloadPDF(doc, filename);
+  }
+  return doc;
+}
+
+export function generateFleetReportPDF({ filters = {}, records = [], summary = {} }, action = 'download') {
+  const todayStr = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
+  const filename = `Gerenciamento_Frota_Relatorio_${todayStr}.pdf`;
+
+  const filterSubtitleParts = [];
+  if (filters.start_date || filters.end_date) {
+    filterSubtitleParts.push(`Periodo: ${formatDateBR(filters.start_date)} a ${formatDateBR(filters.end_date)}`);
+  }
+  if (filters.fuel_type) {
+    filterSubtitleParts.push(`Combustivel: ${filters.fuel_type}`);
+  }
+
+  const doc = createFleetPDFDoc({
+    title: `RELATORIO DE GESTAO DE FROTA${filterSubtitleParts.length ? ` (${filterSubtitleParts.join(' • ')})` : ''}`,
+    sessionCode: 'RELATORIO-CONSOLIDADO',
+    dateStr: new Date().toISOString().split('T')[0],
+    records,
+    summary: {
+      total_vehicles: summary.total_vehicles || summary.total_records || records.length,
+      total_liters: summary.total_liters,
+      total_cost: summary.total_cost,
+      fuels: summary.fuels
+    }
+  });
+
+  if (action === 'view') {
+    openPDFInViewer(doc, filename);
+  } else if (action === 'share') {
+    return sharePDF(doc, filename, 'Relatório Consolidado da Frota');
+  } else {
+    downloadPDF(doc, filename);
+  }
+  return doc;
+}
+
+// ==============================================================================
+// Excel Export Function
+// ==============================================================================
 export function generateSessionExcel(session, records = [], summary) {
-  const formattedDate = session.date ? session.date.split('-').reverse().join('/') : '';
+  const formattedDate = formatDateBR(session.date);
 
   const vehicleRows = records.map((r, i) => ({
     'Item': i + 1,
-    'Sessão': session.code,
+    'Sessão': session.code || '-',
     'Data': formattedDate,
     'Veículo': r.vehicle_name,
     'Placa': r.vehicle_plate,
@@ -353,11 +552,11 @@ export function generateSessionExcel(session, records = [], summary) {
     'Motorista': r.driver_name || '-'
   }));
 
-  const fuelRows = (summary?.fuels || []).map(f => ({
+  const fuels = computeFuelSummary(records, summary);
+  const fuelRows = fuels.map(f => ({
     'Tipo de Combustível': f.name,
     'Veículos': f.count,
     'Total de Litros': Number(f.liters),
-    'Preço Médio / Litro (R$)': Number(f.avg_price_per_liter),
     'Valor Total Gasto (R$)': Number(f.total_cost)
   }));
 
@@ -368,5 +567,5 @@ export function generateSessionExcel(session, records = [], summary) {
   XLSX.utils.book_append_sheet(wb, wsVehicles, 'Veículos');
   XLSX.utils.book_append_sheet(wb, wsFuels, 'Resumo Combustível');
 
-  XLSX.writeFile(wb, `Abastecimento_${session.code}.xlsx`);
+  XLSX.writeFile(wb, `Gerenciamento_Frota_${session.code || 'Export'}.xlsx`);
 }

@@ -171,7 +171,6 @@ export default function FuelingCart({ setActiveTab, onSessionFinalized }) {
                 <span className="text-emerald-400 font-bold">{fuel.liters} L</span>
                 <span className="text-slate-400">•</span>
                 <span className="font-bold text-white">R$ {Number(fuel.total_cost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                <span className="text-[10px] text-slate-400">(Méd. R$ {fuel.avg_price_per_liter}/L)</span>
               </div>
             ))}
           </div>

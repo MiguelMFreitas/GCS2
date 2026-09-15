@@ -31,7 +31,7 @@ export default function FuelingModal({
   const [pricePerLiter, setPricePerLiter] = useState('');
   const [liters, setLiters] = useState('');
   const [autoCalculatedField, setAutoCalculatedField] = useState(null); // 'total' | 'price' | 'liters' | null
-  const [lastEditedPair, setLastEditedPair] = useState(['total', 'price']); // tracking last 2 inputs touched
+  const [lastEditedPair, setLastEditedPair] = useState([]); // tracking last 2 inputs touched
 
   // Odometer & KM
   const [kmPrevious, setKmPrevious] = useState(null);
@@ -40,8 +40,8 @@ export default function FuelingModal({
   const [consumptionKml, setConsumptionKml] = useState(null);
   const [costPerKm, setCostPerKm] = useState(null);
 
-  // Optional / Defaults
-  const [fuelType, setFuelType] = useState('Diesel');
+  // Mandatory Fuel selection (starts empty for Flex vehicles)
+  const [fuelType, setFuelType] = useState('');
 
   // UI Flow State
   const [submitting, setSubmitting] = useState(false);
@@ -50,6 +50,13 @@ export default function FuelingModal({
   const [duplicateWarning, setDuplicateWarning] = useState(null);
 
   const isOdometerWorking = vehicle?.odometer_working === 1;
+  const rawDefaultFuel = vehicle?.fuel_type_default || vehicle?.fuel_type || '';
+  const isFlex = rawDefaultFuel.toUpperCase().includes('FLEX');
+  const fuelOptions = isFlex
+    ? ['Gasolina', 'Etanol']
+    : rawDefaultFuel.toUpperCase().includes('DIESEL')
+    ? ['Diesel S10', 'Diesel Comum']
+    : ['Gasolina', 'Etanol', 'Diesel S10', 'Diesel Comum', 'GNV'];
 
   // Initialize or populate when vehicle / existingRecord changes
   useEffect(() => {
@@ -59,9 +66,6 @@ export default function FuelingModal({
     setSuccessAdded(false);
     setDuplicateWarning(null);
 
-    const defaultFuel = vehicle.fuel_type_default || 'Diesel';
-    setFuelType(defaultFuel);
-
     if (existingRecord) {
       setTotalCost(existingRecord.total_cost ? String(existingRecord.total_cost) : '');
       setPricePerLiter(existingRecord.price_per_liter ? String(existingRecord.price_per_liter) : '');
@@ -69,24 +73,28 @@ export default function FuelingModal({
       setAutoCalculatedField(null);
       setKmPrevious(existingRecord.km_previous || null);
       setKmCurrent(existingRecord.km_current ? String(existingRecord.km_current) : '');
-      setFuelType(existingRecord.fuel_type || defaultFuel);
+      const existFuel = existingRecord.fuel_type || '';
+      setFuelType(existFuel.toUpperCase() === 'FLEX' ? '' : existFuel);
     } else {
-      // Default initial prices based on fuel type
-      const initialPrice = defaultFuel.toUpperCase().includes('GASOLINA')
-        ? '6.19'
-        : defaultFuel.toUpperCase().includes('ETANOL')
-        ? '4.29'
-        : '6.97';
-
-      setPricePerLiter(initialPrice);
+      // All values start STRICTLY BLANK / EMPTY (Item 36)
+      setPricePerLiter('');
       setTotalCost('');
       setLiters('');
       setAutoCalculatedField(null);
-      setLastEditedPair(['total', 'price']);
+      setLastEditedPair([]);
       setKmCurrent('');
       setKmDriven(null);
       setConsumptionKml(null);
       setCostPerKm(null);
+
+      // Flex vehicles MUST prompt explicit choice (Item 38)
+      if (isFlex) {
+        setFuelType('');
+      } else if (rawDefaultFuel && rawDefaultFuel.toUpperCase() !== 'FLEX') {
+        setFuelType(rawDefaultFuel);
+      } else {
+        setFuelType('');
+      }
 
       // Fetch last KM for this vehicle
       if (isOdometerWorking) {
@@ -103,7 +111,7 @@ export default function FuelingModal({
           });
       }
     }
-  }, [vehicle, existingRecord, isOpen, isOdometerWorking]);
+  }, [vehicle, existingRecord, isOpen, isOdometerWorking, isFlex, rawDefaultFuel]);
 
   // Handle Input Changes with "2 of 3" Auto-calculation Logic
   const handleTotalChange = (val) => {
@@ -203,6 +211,16 @@ export default function FuelingModal({
   // Submit Handler
   const handleSubmit = async (forceDuplicate = false) => {
     setErrorMsg('');
+
+    // Mandatory Fuel Validation (Item 38)
+    if (!fuelType || fuelType.trim() === '' || fuelType.toUpperCase() === 'FLEX') {
+      if (isFlex) {
+        setErrorMsg('Selecione o combustível abastecido (Gasolina ou Etanol para veículos Flex).');
+      } else {
+        setErrorMsg('Selecione o combustível abastecido.');
+      }
+      return;
+    }
 
     const numTotal = parseFloat(totalCost);
     const numPrice = parseFloat(pricePerLiter);
@@ -391,7 +409,45 @@ export default function FuelingModal({
                 </div>
               )}
 
-              {/* 1. Quilometragem Atual (Ocultado se odômetro quebrado - Item 6) */}
+              {/* 1. Combustível Abastecido (Obrigatório - Item 38) */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Fuel className="w-4 h-4 text-emerald-400" /> Combustível Abastecido <span className="text-rose-400 font-bold">*</span>
+                  </span>
+                  {isFlex && (
+                    <span className="text-[10px] text-amber-300 font-bold bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-full">
+                      Veículo Flex: escolha o combustível
+                    </span>
+                  )}
+                </label>
+
+                <div className={`grid ${fuelOptions.length === 2 ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3'} gap-2`}>
+                  {fuelOptions.map((fOption) => {
+                    const isSelected = fuelType === fOption;
+                    return (
+                      <button
+                        key={fOption}
+                        type="button"
+                        onClick={() => {
+                          setFuelType(fOption);
+                          if (errorMsg.includes('combustível')) setErrorMsg('');
+                        }}
+                        className={`min-h-[48px] py-2.5 px-3 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg shadow-emerald-950/60 ring-2 ring-emerald-400/50 scale-[1.02]'
+                            : 'bg-slate-800/90 border-slate-700 text-slate-300 hover:bg-slate-750 hover:text-white'
+                        }`}
+                      >
+                        <Fuel className={`w-4 h-4 shrink-0 ${isSelected ? 'text-white' : 'text-slate-400'}`} />
+                        <span className="truncate">{fOption}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 2. Quilometragem Atual (Ocultado se odômetro quebrado - Item 6) */}
               {isOdometerWorking ? (
                 <div className="space-y-1.5">
                   <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center justify-between">
@@ -410,7 +466,7 @@ export default function FuelingModal({
                     placeholder={kmPrevious ? `Ex: ${kmPrevious + 300}` : 'Ex: 232941.8'}
                     value={kmCurrent}
                     onChange={(e) => setKmCurrent(e.target.value)}
-                    className="w-full px-4 py-3 rounded-2xl bg-slate-800/90 border border-slate-700 text-white font-mono font-bold text-base focus:outline-none focus:border-emerald-500 shadow-inner"
+                    className="w-full min-h-[48px] px-4 py-3 rounded-2xl bg-slate-800/90 border border-slate-700 text-white font-mono font-bold text-base focus:outline-none focus:border-emerald-500 shadow-inner"
                   />
                 </div>
               ) : (
@@ -425,7 +481,7 @@ export default function FuelingModal({
                 </div>
               )}
 
-              {/* 2. Os 3 Campos de Combustível (Regra 2 de 3 - Items 3 & 4) */}
+              {/* 3. Os 3 Campos de Combustível (Regra 2 de 3 - Items 3 & 4) */}
               <div className="space-y-3.5 pt-1">
                 
                 {/* Campo 1: Valor Total */}
@@ -444,10 +500,10 @@ export default function FuelingModal({
                     <input
                       type="number"
                       step="0.01"
-                      placeholder="Ex: 408.30"
+                      placeholder="0.00"
                       value={totalCost}
                       onChange={(e) => handleTotalChange(e.target.value)}
-                      className={`w-full px-4 py-3 pl-9 rounded-2xl bg-slate-800/90 border font-mono font-black text-base focus:outline-none transition-colors ${
+                      className={`w-full min-h-[48px] px-4 py-3 pl-9 rounded-2xl bg-slate-800/90 border font-mono font-black text-base focus:outline-none transition-colors ${
                         autoCalculatedField === 'total'
                           ? 'border-emerald-500 text-emerald-400 bg-emerald-950/20'
                           : 'border-slate-700 text-white focus:border-emerald-500'
@@ -473,10 +529,10 @@ export default function FuelingModal({
                     <input
                       type="number"
                       step="0.01"
-                      placeholder="Ex: 6.97"
+                      placeholder="0.00"
                       value={pricePerLiter}
                       onChange={(e) => handlePriceChange(e.target.value)}
-                      className={`w-full px-4 py-3 pl-9 rounded-2xl bg-slate-800/90 border font-mono font-bold text-base focus:outline-none transition-colors ${
+                      className={`w-full min-h-[48px] px-4 py-3 pl-9 rounded-2xl bg-slate-800/90 border font-mono font-bold text-base focus:outline-none transition-colors ${
                         autoCalculatedField === 'price'
                           ? 'border-emerald-500 text-emerald-400 bg-emerald-950/20'
                           : 'border-slate-700 text-white focus:border-emerald-500'
@@ -502,10 +558,10 @@ export default function FuelingModal({
                     <input
                       type="number"
                       step="0.01"
-                      placeholder="Ex: 58.58"
+                      placeholder="0.00"
                       value={liters}
                       onChange={(e) => handleLitersChange(e.target.value)}
-                      className={`w-full px-4 py-3 pr-8 rounded-2xl bg-slate-800/90 border font-mono font-bold text-base focus:outline-none transition-colors ${
+                      className={`w-full min-h-[48px] px-4 py-3 pr-8 rounded-2xl bg-slate-800/90 border font-mono font-bold text-base focus:outline-none transition-colors ${
                         autoCalculatedField === 'liters'
                           ? 'border-emerald-500 text-emerald-400 bg-emerald-950/20'
                           : 'border-slate-700 text-white focus:border-emerald-500'

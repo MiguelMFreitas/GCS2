@@ -40,20 +40,23 @@ export default function Layout({ children, activeTab, setActiveTab, onOpenVehicl
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col md:flex-row pb-24 md:pb-0">
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col w-72 bg-slate-900 border-r border-slate-800 shrink-0 sticky top-0 h-screen overflow-y-auto">
-        {/* Brand Header */}
+        {/* Brand Header: Unified Clickable Area (Requirements 1, 2, 3, 4) */}
         <div className="p-6 border-b border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-emerald-400 flex items-center justify-center shadow-lg shadow-emerald-950/40">
+          <button
+            onClick={() => setActiveTab('dashboard')}
+            aria-label="Voltar para página inicial"
+            className="flex items-center gap-3 text-left group cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/50 rounded-2xl p-1.5 -m-1.5 transition-all hover:bg-slate-800/60"
+          >
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-emerald-400 flex items-center justify-center shadow-lg shadow-emerald-950/40 group-hover:scale-105 transition-transform shrink-0">
               <Fuel className="w-6 h-6 text-slate-950 stroke-[2.5]" />
             </div>
-            <div>
-              <h1 className="font-bold text-lg text-white tracking-tight flex items-center gap-1.5">
-                GCS<span className="text-emerald-400 font-extrabold">2</span>
-                <span className="text-[10px] uppercase font-semibold tracking-wider bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded">Frota</span>
+            <div className="min-w-0">
+              <h1 className="font-bold text-base text-white tracking-tight group-hover:text-emerald-400 transition-colors truncate">
+                Gerenciamento de Frota
               </h1>
-              <p className="text-xs text-slate-400">Gestão & Abastecimento</p>
+              <p className="text-[11px] text-slate-400 font-medium">Controle & Abastecimento</p>
             </div>
-          </div>
+          </button>
         </div>
 
         {/* Navigation Items */}
@@ -65,7 +68,7 @@ export default function Layout({ children, activeTab, setActiveTab, onOpenVehicl
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-medium transition-all group ${
+                className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-medium transition-all group cursor-pointer ${
                   isActive
                     ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/30'
                     : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
@@ -109,7 +112,7 @@ export default function Layout({ children, activeTab, setActiveTab, onOpenVehicl
             <button
               onClick={logout}
               title="Sair do sistema"
-              className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors flex items-center gap-1 text-xs font-medium"
+              className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors flex items-center gap-1 text-xs font-medium cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -119,39 +122,49 @@ export default function Layout({ children, activeTab, setActiveTab, onOpenVehicl
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top Mobile Bar */}
-        <header className="md:hidden bg-slate-900 border-b border-slate-800 px-4 py-3.5 flex items-center justify-between sticky top-0 z-30">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center shadow">
-              <Fuel className="w-5 h-5 text-slate-950 font-bold" />
+        {/* Top Mobile Bar (Requirements 2, 3, 24, 25, 26, 27) */}
+        <header className="md:hidden bg-slate-900 border-b border-slate-800 px-3.5 py-3 flex items-center justify-between sticky top-0 z-30 shadow-md">
+          {/* Brand Link + Logo Area */}
+          <button
+            onClick={() => setActiveTab('dashboard')}
+            aria-label="Voltar para página inicial"
+            className="flex items-center gap-2.5 text-left cursor-pointer focus:outline-none active:scale-95 transition-transform min-h-[44px] py-1"
+          >
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-emerald-600 to-emerald-400 flex items-center justify-center shadow shrink-0">
+              <Fuel className="w-5 h-5 text-slate-950 stroke-[2.5]" />
             </div>
-            <span className="font-bold text-base text-white">GCS<span className="text-emerald-400">2</span> Frota</span>
-          </div>
+            <span className="font-bold text-sm sm:text-base text-white tracking-tight truncate">
+              Gerenciamento de Frota
+            </span>
+          </button>
 
-          <div className="flex items-center gap-2">
+          {/* Right Mobile Actions */}
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => setActiveTab('cart')}
-              className="relative p-2 bg-slate-800 rounded-lg text-slate-200 hover:text-emerald-400"
+              aria-label="Carrinho de Abastecimento"
+              className="relative min-w-[44px] min-h-[44px] p-2.5 bg-slate-800 hover:bg-slate-750 active:scale-95 rounded-xl text-slate-200 hover:text-emerald-400 transition-all flex items-center justify-center cursor-pointer"
             >
               <ShoppingCart className="w-5 h-5" />
               {itemCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-emerald-500 text-slate-950 text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 bg-emerald-500 text-slate-950 text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-md">
                   {itemCount}
                 </span>
               )}
             </button>
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 bg-slate-800 rounded-lg text-slate-200"
+              aria-label={mobileMenuOpen ? "Fechar menu" : "Abrir menu"}
+              className="min-w-[44px] min-h-[44px] p-2.5 bg-slate-800 hover:bg-slate-750 active:scale-95 rounded-xl text-slate-200 hover:text-white transition-all flex items-center justify-center cursor-pointer"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
           </div>
         </header>
 
-        {/* Mobile Dropdown Menu */}
+        {/* Mobile Dropdown / Drawer Menu (Requirement 28) */}
         {mobileMenuOpen && (
-          <div className="md:hidden bg-slate-900 border-b border-slate-800 p-4 space-y-1.5 z-40">
+          <div className="md:hidden bg-slate-900/95 backdrop-blur-md border-b border-slate-800 p-4 space-y-1.5 z-40 shadow-2xl animate-in slide-in-from-top-2 duration-200">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
@@ -162,29 +175,37 @@ export default function Layout({ children, activeTab, setActiveTab, onOpenVehicl
                     setActiveTab(item.id);
                     setMobileMenuOpen(false);
                   }}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium ${
-                    isActive ? 'bg-emerald-600 text-white' : 'text-slate-300 hover:bg-slate-800'
+                  className={`w-full min-h-[48px] flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium transition-colors cursor-pointer ${
+                    isActive ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-200 hover:bg-slate-800 active:bg-slate-750'
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <Icon className="w-4 h-4" />
-                    <span>{item.label}</span>
+                    <Icon className="w-5 h-5 shrink-0" />
+                    <span className="font-semibold">{item.label}</span>
                   </div>
                   {item.count !== undefined && item.count > 0 && (
-                    <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full text-xs font-bold">
+                    <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2.5 py-0.5 rounded-full text-xs font-bold">
                       {item.count}
+                    </span>
+                  )}
+                  {item.badge && !item.count && (
+                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-semibold px-2 py-0.5 rounded">
+                      {item.badge}
                     </span>
                   )}
                 </button>
               );
             })}
-            <div className="pt-2.5 border-t border-slate-800 flex items-center justify-between px-2">
+            <div className="pt-3 mt-2 border-t border-slate-800 flex items-center justify-between px-2">
               <div>
                 <span className="text-xs font-bold text-white block">{user?.name || user?.username || 'Gerente'}</span>
                 <span className="text-[10px] text-emerald-400 font-semibold">{user?.role === 'admin' ? 'Administrador' : 'Operador'}</span>
               </div>
-              <button onClick={logout} className="text-xs font-semibold text-rose-400 hover:text-rose-300 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-500/10">
-                <LogOut className="w-3.5 h-3.5" /> Sair
+              <button
+                onClick={logout}
+                className="min-h-[40px] px-4 py-2 text-xs font-bold text-rose-400 hover:text-rose-300 flex items-center gap-1.5 rounded-xl bg-rose-500/10 active:bg-rose-500/20 transition-colors cursor-pointer"
+              >
+                <LogOut className="w-4 h-4" /> Sair
               </button>
             </div>
           </div>

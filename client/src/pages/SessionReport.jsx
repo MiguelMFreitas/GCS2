@@ -62,38 +62,52 @@ export default function SessionReport({ sessionId, onBack, setActiveTab }) {
   return (
     <div className="space-y-6">
       
-      {/* Top Navigation & Export Actions (Requirement 35) */}
-      <div className="no-print flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-4 sm:p-5 rounded-2xl shadow-md">
+      {/* Top Navigation & Export Actions (PDF Primary) */}
+      <div className="no-print flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 bg-slate-900 border border-slate-800 p-4 sm:p-5 rounded-2xl shadow-md">
         <button
           onClick={onBack || (() => setActiveTab('history'))}
-          className="inline-flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-300 hover:text-white transition-colors"
+          className="inline-flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-300 hover:text-white transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" /> Voltar ao Histórico
         </button>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Primary Action: Gerar / Baixar PDF */}
           <button
-            onClick={() => generateSessionPDF(session, records, summary)}
-            className="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-750 text-white text-xs font-bold flex items-center gap-2 border border-slate-700 transition-colors shadow-sm"
+            onClick={() => generateSessionPDF(session, records, summary, 'download')}
+            className="flex-1 sm:flex-none py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 transition-all cursor-pointer"
           >
-            <FileText className="w-4 h-4 text-rose-400" />
-            📄 Gerar PDF
+            <FileText className="w-4 h-4 text-emerald-100" />
+            Gerar PDF
           </button>
 
+          {/* View PDF */}
+          <button
+            onClick={() => generateSessionPDF(session, records, summary, 'view')}
+            className="flex-1 sm:flex-none py-2.5 px-3.5 rounded-xl bg-slate-800 hover:bg-slate-750 active:scale-[0.98] text-white text-xs font-semibold flex items-center justify-center gap-1.5 border border-slate-700 transition-colors shadow-sm cursor-pointer"
+          >
+            <Eye className="w-3.5 h-3.5 text-blue-400" />
+            Visualizar
+          </button>
+
+          {/* Share PDF (when supported) */}
+          {typeof navigator !== 'undefined' && navigator.canShare && (
+            <button
+              onClick={() => generateSessionPDF(session, records, summary, 'share')}
+              className="flex-1 sm:flex-none py-2.5 px-3.5 rounded-xl bg-slate-800 hover:bg-slate-750 active:scale-[0.98] text-white text-xs font-semibold flex items-center justify-center gap-1.5 border border-slate-700 transition-colors shadow-sm cursor-pointer"
+            >
+              <Share2 className="w-3.5 h-3.5 text-emerald-400" />
+              Compartilhar
+            </button>
+          )}
+
+          {/* Secondary Action: Export Excel */}
           <button
             onClick={() => generateSessionExcel(session, records, summary)}
-            className="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-750 text-white text-xs font-bold flex items-center gap-2 border border-slate-700 transition-colors shadow-sm"
+            className="py-2.5 px-3 rounded-xl bg-slate-800/80 hover:bg-slate-750 text-slate-300 hover:text-white text-xs font-medium flex items-center justify-center gap-1.5 border border-slate-700/60 transition-colors cursor-pointer"
           >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-            📊 Exportar Excel
-          </button>
-
-          <button
-            onClick={() => window.print()}
-            className="py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-950/40 transition-colors"
-          >
-            <Printer className="w-4 h-4" />
-            🖨 Imprimir Relatório
+            <FileSpreadsheet className="w-3.5 h-3.5 text-slate-400" />
+            Excel
           </button>
         </div>
       </div>
@@ -132,38 +146,38 @@ export default function SessionReport({ sessionId, onBack, setActiveTab }) {
           </div>
         </div>
 
-        {/* Resumo Geral (Requirement 25) */}
+        {/* Resumo Geral (Executive 4-col KPI) */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
             <span className="text-xs font-semibold text-slate-400 block">Veículos Abastecidos</span>
             <p className="text-2xl font-black text-white mt-1">
-              🚚 {summary.total_vehicles || records.length}
+              {summary.total_vehicles || records.length}
             </p>
           </div>
 
           <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
             <span className="text-xs font-semibold text-slate-400 block">Total de Litros</span>
-            <p className="text-2xl font-black text-emerald-400 mt-1">
-              {Number(summary.total_liters || session.total_liters || 0).toFixed(2)} <span className="text-xs text-slate-400 font-normal">L</span>
+            <p className="text-2xl font-black text-blue-400 mt-1">
+              {formatLiters(summary.total_liters || session.total_liters)}
             </p>
           </div>
 
           <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
             <span className="text-xs font-semibold text-slate-400 block">Quilômetros Rodados</span>
-            <p className="text-2xl font-black text-blue-400 mt-1">
-              {summary.total_km_driven ? `${Number(summary.total_km_driven).toLocaleString('pt-BR')} km` : '—'}
+            <p className="text-2xl font-black text-slate-200 mt-1">
+              {summary.total_km_driven ? formatKm(summary.total_km_driven) : '—'}
             </p>
           </div>
 
           <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
             <span className="text-xs font-semibold text-slate-400 block">Média da Frota</span>
-            <p className="text-2xl font-black text-blue-400 mt-1">
-              {summary.fleet_avg_consumption_kml ? `${summary.fleet_avg_consumption_kml} km/L` : '—'}
+            <p className="text-2xl font-black text-emerald-400 mt-1">
+              {summary.fleet_avg_consumption_kml ? formatConsumption(summary.fleet_avg_consumption_kml) : '—'}
             </p>
           </div>
         </div>
 
-        {/* Resumo por Combustível: Gasolina, Diesel, Etanol (Requirements 27, 28, 29, 30, 31) */}
+        {/* Resumo por Combustível: Gasolina, Diesel, Etanol */}
         <div className="space-y-3 pt-2">
           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300">
             Consolidação por Combustível
@@ -186,9 +200,10 @@ export default function SessionReport({ sessionId, onBack, setActiveTab }) {
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-black uppercase tracking-wider text-white flex items-center gap-1.5">
-                      {isDiesel ? '🚚' : isGasolina ? '⛽' : '🌿'} {fuel.name.toUpperCase()}
+                      <Fuel className="w-4 h-4 text-emerald-400" />
+                      {fuel.name.toUpperCase()}
                     </span>
-                    <span className="text-xs font-bold bg-slate-800 text-slate-300 px-2 py-0.5 rounded">
+                    <span className="text-xs font-bold bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-full">
                       {fuel.count} {fuel.count === 1 ? 'veículo' : 'veículos'}
                     </span>
                   </div>
@@ -196,16 +211,12 @@ export default function SessionReport({ sessionId, onBack, setActiveTab }) {
                   <div className="space-y-1.5 text-xs text-slate-300">
                     <div className="flex justify-between">
                       <span className="text-slate-400">Total de Litros:</span>
-                      <strong className="text-white">{Number(fuel.liters).toFixed(2)} L</strong>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Preço Médio / Litro:</span>
-                      <strong className="text-white">R$ {Number(fuel.avg_price_per_liter).toFixed(2)}/L</strong>
+                      <strong className="text-white">{formatLiters(fuel.liters)}</strong>
                     </div>
                     <div className="flex justify-between border-t border-slate-800/80 pt-2 text-sm">
                       <span className="font-bold text-slate-200">Total Gasto:</span>
                       <strong className="font-black text-emerald-400">
-                        R$ {Number(fuel.total_cost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        {formatCurrency(fuel.total_cost)}
                       </strong>
                     </div>
                   </div>
@@ -264,53 +275,75 @@ export default function SessionReport({ sessionId, onBack, setActiveTab }) {
                   
                   {/* KM Anterior & Atual */}
                   <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
-                    <span className="text-[10px] text-slate-400 block">Quilometragem</span>
+                    <span className="text-[10px] text-slate-400 block font-semibold">Quilometragem</span>
                     <span className="font-bold text-white block">
                       {hasOdometer
-                        ? (r.km_current ? `${Number(r.km_current).toLocaleString('pt-BR')} km` : '-')
-                        : <span className="text-slate-500 italic">Não funcional</span>}
+                        ? (r.km_current ? formatKm(r.km_current) : '-')
+                        : <span className="text-amber-400/90 text-[11px] font-medium">Não funcional</span>}
                     </span>
-                    {hasOdometer && r.km_previous && (
-                      <span className="text-[9px] text-slate-500">
-                        Ant: {Number(r.km_previous).toLocaleString('pt-BR')} km
+                    {hasOdometer && (r.km_previous ? (
+                      <span className="text-[10px] text-slate-500">
+                        Ant: {formatKm(r.km_previous)}
                       </span>
-                    )}
+                    ) : (
+                      <span className="text-[10px] text-blue-400/80">
+                        Primeiro abastecimento
+                      </span>
+                    ))}
                   </div>
 
                   {/* KM Rodados */}
                   <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
-                    <span className="text-[10px] text-slate-400 block">KM Rodados</span>
+                    <span className="text-[10px] text-slate-400 block font-semibold">KM Rodados</span>
                     <span className="font-bold text-blue-400 block">
                       {hasOdometer && r.km_driven
-                        ? `${Number(r.km_driven).toLocaleString('pt-BR')} km`
-                        : '—'}
+                        ? formatKm(r.km_driven)
+                        : <span className="text-slate-500">—</span>}
                     </span>
                   </div>
 
                   {/* Média de Consumo km/L */}
                   <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
-                    <span className="text-[10px] text-slate-400 block">Consumo Médio</span>
+                    <span className="text-[10px] text-slate-400 block font-semibold">Consumo Médio</span>
                     <span className="font-black text-emerald-400 block">
-                      {hasOdometer && r.consumption_kml
-                        ? `${Number(r.consumption_kml).toFixed(2)} km/L`
-                        : <span className="text-slate-400 italic text-[11px]">Não calculado</span>}
+                      {!hasOdometer ? (
+                        <span className="text-amber-400/90 text-[11px] font-semibold block leading-tight">
+                          Consumo não calculado
+                        </span>
+                      ) : (!r.km_previous || !r.km_driven ? (
+                        <span className="text-blue-300 text-[11px] font-semibold block leading-tight">
+                          Ainda não disponível
+                        </span>
+                      ) : (
+                        formatConsumption(r.consumption_kml)
+                      ))}
                     </span>
+                    {!hasOdometer && (
+                      <span className="text-[9px] text-slate-500 leading-tight block mt-0.5">
+                        Odômetro não funcional
+                      </span>
+                    )}
+                    {hasOdometer && (!r.km_previous || !r.km_driven) && (
+                      <span className="text-[9px] text-slate-500 leading-tight block mt-0.5">
+                        Necessário abastecimento anterior
+                      </span>
+                    )}
                   </div>
 
                   {/* Volume de Litros */}
                   <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
-                    <span className="text-[10px] text-slate-400 block">Litros</span>
+                    <span className="text-[10px] text-slate-400 block font-semibold">Litros</span>
                     <span className="font-bold text-white block">
-                      {Number(r.liters).toFixed(2)} L
+                      {formatLiters(r.liters)}
                     </span>
-                    <span className="text-[9px] text-slate-500">
-                      R$ {Number(r.price_per_liter).toFixed(2)}/L
+                    <span className="text-[10px] text-slate-400">
+                      R$ {Number(r.price_per_liter || 0).toFixed(2)}/L
                     </span>
                   </div>
 
                   {/* Custo por KM */}
                   <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
-                    <span className="text-[10px] text-slate-400 block">Custo por KM</span>
+                    <span className="text-[10px] text-slate-400 block font-semibold">Custo por KM</span>
                     <span className="font-bold text-slate-200 block">
                       {hasOdometer && r.cost_per_km
                         ? `R$ ${Number(r.cost_per_km).toFixed(2)}/km`
@@ -322,7 +355,7 @@ export default function SessionReport({ sessionId, onBack, setActiveTab }) {
                   <div className="bg-emerald-950/30 p-2.5 rounded-xl border border-emerald-500/30">
                     <span className="text-[10px] text-emerald-300 block font-semibold">Valor Pago</span>
                     <span className="font-black text-emerald-400 text-sm block">
-                      R$ {Number(r.total_cost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      {formatCurrency(r.total_cost)}
                     </span>
                   </div>
                 </div>
