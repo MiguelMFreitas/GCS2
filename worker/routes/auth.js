@@ -78,7 +78,7 @@ export async function getMe(request, env, user) {
   try {
     const dbUser = await get(
       env.DB,
-      'SELECT id, username, name, email, role, active, created_at, last_login_at FROM users WHERE id = ?',
+      'SELECT id, username, name, email, role, active FROM users WHERE id = ?',
       [user.id]
     );
     if (!dbUser || dbUser.active !== 1) {
@@ -89,12 +89,13 @@ export async function getMe(request, env, user) {
       user: {
         id: dbUser.id,
         username: dbUser.username || user.username || 'gerente',
-        name: dbUser.name,
+        name: dbUser.name || 'Gerente',
         email: dbUser.email,
-        role: dbUser.role
+        role: dbUser.role || 'admin'
       }
     });
   } catch (err) {
+    console.error('Erro no getMe Worker:', err);
     return Response.json({ error: 'Erro ao validar sessão.' }, { status: 500 });
   }
 }

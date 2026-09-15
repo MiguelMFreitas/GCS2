@@ -1,7 +1,7 @@
 // Edge-compatible JWT, Cookie & Crypto Utilities for Cloudflare Workers
 import bcrypt from 'bcryptjs';
 
-const DEFAULT_SECRET = 'gcs2-super-secure-jwt-key-2026';
+export const DEFAULT_SECRET = 'gcs2-super-secure-jwt-key-2026';
 
 function base64UrlEncode(str) {
   let b64;
@@ -35,9 +35,10 @@ function base64UrlDecode(str) {
 
 async function getHmacKey(secret) {
   const enc = new TextEncoder();
+  const actualSecret = secret || DEFAULT_SECRET;
   return await crypto.subtle.importKey(
     'raw',
-    enc.encode(secret || DEFAULT_SECRET),
+    enc.encode(actualSecret),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign', 'verify']
@@ -57,7 +58,7 @@ export async function generateToken(payload, secret = DEFAULT_SECRET, expiresInS
   const encodedPayload = base64UrlEncode(JSON.stringify(fullPayload));
   const data = `${encodedHeader}.${encodedPayload}`;
 
-  const key = await getHmacKey(secret);
+  const key = await getHmacKey(secret || DEFAULT_SECRET);
   const enc = new TextEncoder();
   const signatureBuffer = await crypto.subtle.sign('HMAC', key, enc.encode(data));
   const encodedSignature = base64UrlEncodeBuffer(signatureBuffer);
@@ -74,7 +75,7 @@ export async function verifyToken(token, secret = DEFAULT_SECRET) {
   const data = `${encodedHeader}.${encodedPayload}`;
 
   try {
-    const key = await getHmacKey(secret);
+    const key = await getHmacKey(secret || DEFAULT_SECRET);
     const enc = new TextEncoder();
 
     let b64 = encodedSignature.replace(/-/g, '+').replace(/_/g, '/');
@@ -100,12 +101,20 @@ export async function verifyToken(token, secret = DEFAULT_SECRET) {
 }
 
 export function parseCookies(request) {
-  const cookieHeader = request.headers.get('Cookie') || '';
+  const cookieHeader = request.headers.get('Cookie') || request.headers.get('cookie') || '';
   const cookies = {};
+  if (!cookieHeader) return cookies;
+
   cookieHeader.split(';').forEach(cookie => {
-    const parts = cookie.split('=');
-    if (parts.length === 2) {
-      cookies[parts[0].trim()] = decodeURIComponent(parts[1].trim());
+    const idx = cookie.indexOf('=');
+    if (idx !== -1) {
+      const key = cookie.substring(0, idx).trim();
+      const val = cookie.substring(idx + 1).trim();
+      try {
+        cookies[key] = decodeURIComponent(val);
+      } catch (e) {
+        cookies[key] = val;
+      }
     }
   });
   return cookies;

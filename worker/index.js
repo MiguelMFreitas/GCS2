@@ -9,17 +9,19 @@ import * as documentRoute from './routes/documents.js';
 import * as reportRoute from './routes/reports.js';
 import * as userRoute from './routes/users.js';
 import * as uploadRoute from './routes/upload.js';
-import { verifyToken, parseCookies } from './utils/auth.js';
+import { verifyToken, parseCookies, DEFAULT_SECRET } from './utils/auth.js';
 
 function addCorsHeaders(response, request) {
   const newHeaders = new Headers(response.headers);
-  const origin = request.headers.get('Origin') || '*';
+  const origin = request.headers.get('Origin');
   
-  newHeaders.set('Access-Control-Allow-Origin', origin);
-  newHeaders.set('Access-Control-Allow-Credentials', 'true');
-  newHeaders.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  newHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cookie');
-  newHeaders.set('Access-Control-Max-Age', '86400');
+  if (origin) {
+    newHeaders.set('Access-Control-Allow-Origin', origin);
+    newHeaders.set('Access-Control-Allow-Credentials', 'true');
+    newHeaders.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    newHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cookie');
+    newHeaders.set('Access-Control-Max-Age', '86400');
+  }
   
   return new Response(response.body, {
     status: response.status,
@@ -36,16 +38,18 @@ export default {
 
     // 1. Handle CORS Preflight
     if (method === 'OPTIONS') {
-      const origin = request.headers.get('Origin') || '*';
+      const origin = request.headers.get('Origin');
+      const preflightHeaders = new Headers();
+      if (origin) {
+        preflightHeaders.set('Access-Control-Allow-Origin', origin);
+        preflightHeaders.set('Access-Control-Allow-Credentials', 'true');
+      }
+      preflightHeaders.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+      preflightHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cookie');
+      preflightHeaders.set('Access-Control-Max-Age', '86400');
       return new Response(null, {
         status: 204,
-        headers: {
-          'Access-Control-Allow-Origin': origin,
-          'Access-Control-Allow-Credentials': 'true',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Cookie',
-          'Access-Control-Max-Age': '86400'
-        }
+        headers: preflightHeaders
       });
     }
 
@@ -94,13 +98,14 @@ async function handleApiRoute(request, env, pathname, method) {
   let token = cookies['gcs2_session'] || null;
 
   if (!token) {
-    const authHeader = request.headers.get('Authorization') || '';
+    const authHeader = request.headers.get('Authorization') || request.headers.get('authorization') || '';
     if (authHeader.startsWith('Bearer ')) {
       token = authHeader.slice(7);
     }
   }
 
-  const user = token ? await verifyToken(token, env.JWT_SECRET) : null;
+  const jwtSecret = env.JWT_SECRET || DEFAULT_SECRET;
+  const user = token ? await verifyToken(token, jwtSecret) : null;
 
   if (!user) {
     return Response.json({ error: 'Acesso negado. Sessão inválida ou ausente.' }, { status: 401 });

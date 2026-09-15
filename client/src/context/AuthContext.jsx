@@ -1,59 +1,71 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authService } from '../services/api';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
+  const [user, setUser] = useState(null);
+  const [authStatus, setAuthStatus] = useState('loading'); // 'loading' | 'authenticated' | 'unauthenticated'
+
+  // Centralized session verification directly with the backend
+  const checkAuth = useCallback(async () => {
     try {
-      const saved = localStorage.getItem('gcs2_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
+      const res = await authService.getMe();
+      if (res.data?.authenticated && res.data?.user) {
+        setUser(res.data.user);
+        setAuthStatus('authenticated');
+        return res.data.user;
+      } else {
+        setUser(null);
+        setAuthStatus('unauthenticated');
+        return null;
+      }
+    } catch (err) {
+      setUser(null);
+      setAuthStatus('unauthenticated');
       return null;
     }
-  });
-  const [loading, setLoading] = useState(true);
-
-  // Validate session with backend on initial load and refresh (F5)
-  useEffect(() => {
-    authService.getMe()
-      .then((res) => {
-        if (res.data?.authenticated && res.data?.user) {
-          setUser(res.data.user);
-          localStorage.setItem('gcs2_user', JSON.stringify(res.data.user));
-        } else {
-          setUser(null);
-          localStorage.removeItem('gcs2_user');
-          localStorage.removeItem('gcs2_token');
-        }
-      })
-      .catch(() => {
-        setUser(null);
-        localStorage.removeItem('gcs2_user');
-        localStorage.removeItem('gcs2_token');
-      })
-      .finally(() => {
-        setLoading(false);
-      });
   }, []);
 
+  // Check auth session on initial load and page refresh (F5)
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
   const login = async (username, password) => {
+    // 1. Send credentials to backend
     const res = await authService.login({
       username: (username || '').trim(),
       email: (username || '').trim(),
       password,
     });
-    
-    const { token, user: newUser } = res.data;
+
+    const { token, user: loginUser } = res.data || {};
     if (token) {
       localStorage.setItem('gcs2_token', token);
     }
-    localStorage.setItem('gcs2_user', JSON.stringify(newUser));
-    setUser(newUser);
-    return res.data;
+    if (loginUser) {
+      localStorage.setItem('gcs2_user', JSON.stringify(loginUser));
+    }
+
+    // 2. Immediately verify session with cookie / api
+    const verifiedUser = await checkAuth();
+    if (verifiedUser) {
+      return res.data;
+    }
+
+    // 3. Fallback to direct returned user if cookie is same-origin
+    if (loginUser) {
+      setUser(loginUser);
+      setAuthStatus('authenticated');
+      return res.data;
+    }
+
+    throw new Error('Falha ao autenticar sessão no servidor.');
   };
 
   const logout = async () => {
+    setAuthStatus('loading');
     try {
       await authService.logout();
     } catch (err) {
@@ -62,14 +74,23 @@ export function AuthProvider({ children }) {
       localStorage.removeItem('gcs2_token');
       localStorage.removeItem('gcs2_user');
       setUser(null);
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
-      }
+      setAuthStatus('unauthenticated');
     }
   };
 
+  const value = {
+    user,
+    authStatus,
+    isAuthenticated: authStatus === 'authenticated',
+    loading: authStatus === 'loading',
+    login,
+    logout,
+    checkAuth,
+    setUser
+  };
+
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, loading, login, logout, setUser }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

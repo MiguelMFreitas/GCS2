@@ -5,7 +5,7 @@ import { authService } from '../services/api';
 
 export default function Login() {
   const { login } = useAuth();
-  const [username, setUsername] = useState('gerente');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -23,13 +23,8 @@ export default function Login() {
     try {
       const res = await login(username, password);
       setSuccessMsg(res?.message || 'Login realizado com sucesso.');
-      // Small timeout for user feedback before redirecting
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 600);
     } catch (err) {
-      setErrorMsg(err.response?.data?.error || 'Usuário ou senha incorretos.');
-    } finally {
+      setErrorMsg(err.response?.data?.error || err.message || 'Usuário ou senha incorretos.');
       setLoading(false);
     }
   };
@@ -89,6 +84,8 @@ export default function Login() {
               <div className="relative">
                 <input
                   type="text"
+                  name="username"
+                  autoComplete="username"
                   placeholder="Informe seu usuário"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
@@ -116,6 +113,8 @@ export default function Login() {
               <div className="relative">
                 <input
                   type="password"
+                  name="password"
+                  autoComplete="current-password"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -131,7 +130,9 @@ export default function Login() {
               disabled={loading}
               className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/60 transition-all disabled:opacity-50"
             >
-              {loading ? 'Validando acesso...' : (
+              {loading ? (
+                <span>Validando acesso...</span>
+              ) : (
                 <>
                   Entrar no Sistema <ArrowRight className="w-4 h-4" />
                 </>

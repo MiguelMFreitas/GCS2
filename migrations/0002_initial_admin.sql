@@ -3,7 +3,7 @@
 -- Inserção segura do usuário administrador inicial 'gerente' e operador
 -- ==============================================================================
 
--- Administrador Inicial: Usuário 'gerente' (senha: 'Civam123' criptografada em bcrypt)
+-- Administrador Inicial: Usuário 'gerente' (senha armazenada em hash bcrypt)
 INSERT OR IGNORE INTO users (id, username, name, email, password_hash, role, active)
 VALUES (
   1,

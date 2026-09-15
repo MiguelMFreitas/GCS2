@@ -7,7 +7,7 @@
 ALTER TABLE users ADD COLUMN username TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username);
 
--- Garante a inserção do administrador 'gerente' com a senha inicial 'Civam123' (hash bcrypt)
+-- Garante a inserção do administrador 'gerente' com senha armazenada em hash bcrypt
 INSERT OR IGNORE INTO users (username, name, email, password_hash, role, active)
 VALUES (
   'gerente',

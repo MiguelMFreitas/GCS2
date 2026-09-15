@@ -17,7 +17,11 @@ export async function seedDatabase() {
 
   // 1. Users
   const salt = bcrypt.genSaltSync(10);
-  const hashGerente = bcrypt.hashSync('Civam123', salt);
+  const initialAdminPassword = process.env.INITIAL_ADMIN_PASSWORD;
+  if (!initialAdminPassword) {
+    throw new Error('A variável de ambiente INITIAL_ADMIN_PASSWORD é obrigatória para executar o seed.');
+  }
+  const hashGerente = bcrypt.hashSync(initialAdminPassword, salt);
   const hashOp = bcrypt.hashSync('123456', salt);
 
   run(

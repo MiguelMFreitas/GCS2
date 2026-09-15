@@ -4,8 +4,12 @@ const api = axios.create({
   baseURL: '/api',
   timeout: 30000,
   withCredentials: true,
+  headers: {
+    'X-Requested-With': 'XMLHttpRequest'
+  }
 });
 
+// Attach Authorization Bearer token header if available in storage as redundant safety
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('gcs2_token');
   if (token) {
@@ -14,15 +18,16 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Response interceptor
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Only redirect to login if it's not a login attempt itself
-    if (error.response?.status === 401 && !error.config?.url?.includes('/auth/login')) {
-      localStorage.removeItem('gcs2_token');
-      localStorage.removeItem('gcs2_user');
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+    // If receiving 401 on business APIs (not auth check endpoints), clear storage
+    if (error.response?.status === 401) {
+      const isAuthEndpoint = error.config?.url?.includes('/auth/');
+      if (!isAuthEndpoint) {
+        localStorage.removeItem('gcs2_token');
+        localStorage.removeItem('gcs2_user');
       }
     }
     return Promise.reject(error);
