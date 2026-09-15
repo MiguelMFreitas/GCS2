@@ -17,13 +17,15 @@ const router = express.Router();
 
 // Public auth routes
 router.post('/auth/login', authController.login);
+router.post('/auth/logout', authController.logout);
 router.post('/auth/forgot-password', authController.resetPassword);
 
 // Protected routes
 router.use(authenticateToken);
 
-// Current user
+// Current user & password
 router.get('/auth/me', authController.getMe);
+router.post('/auth/change-password', authController.changePassword);
 
 // Uploads
 router.post('/upload', upload.single('file'), uploadController.uploadFile);

@@ -76,16 +76,31 @@ export function exec(sql) {
 }
 
 function initSchema() {
+  try {
+    dbInstance.exec("ALTER TABLE users ADD COLUMN username TEXT;");
+  } catch (e) {}
+  try {
+    dbInstance.exec("ALTER TABLE users ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP;");
+  } catch (e) {}
+  try {
+    dbInstance.exec("ALTER TABLE users ADD COLUMN last_login_at DATETIME;");
+  } catch (e) {}
+
   const schema = `
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE,
       name TEXT NOT NULL,
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT 'operator',
       active INTEGER NOT NULL DEFAULT 1,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_login_at DATETIME
     );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username);
 
     CREATE TABLE IF NOT EXISTS vehicles (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

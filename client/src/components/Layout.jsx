@@ -94,20 +94,22 @@ export default function Layout({ children, activeTab, setActiveTab, onOpenVehicl
 
         {/* User Card & Logout */}
         <div className="p-4 border-t border-slate-800 bg-slate-900/50">
-          <div className="flex items-center justify-between p-2 rounded-xl bg-slate-800/60 border border-slate-700/50">
+          <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center font-bold text-xs text-emerald-400 shrink-0">
-                {user?.name?.charAt(0) || 'U'}
+              <div className="w-9 h-9 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center font-black text-xs text-emerald-400 shrink-0">
+                {(user?.name || user?.username || 'G').charAt(0).toUpperCase()}
               </div>
               <div className="truncate text-left">
-                <p className="text-xs font-semibold text-white truncate">{user?.name || 'Operador'}</p>
-                <p className="text-[11px] text-slate-400 capitalize truncate">{user?.role || 'Frotista'}</p>
+                <p className="text-xs font-bold text-white truncate">{user?.name || user?.username || 'Gerente'}</p>
+                <p className="text-[11px] text-emerald-400 font-semibold truncate">
+                  {user?.role === 'admin' ? 'Administrador' : (user?.role === 'operator' ? 'Operador de Pista' : (user?.role || 'Usuário'))}
+                </p>
               </div>
             </div>
             <button
               onClick={logout}
               title="Sair do sistema"
-              className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+              className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors flex items-center gap-1 text-xs font-medium"
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -176,9 +178,12 @@ export default function Layout({ children, activeTab, setActiveTab, onOpenVehicl
                 </button>
               );
             })}
-            <div className="pt-2 border-t border-slate-800 flex items-center justify-between px-2">
-              <span className="text-xs text-slate-400">{user?.name}</span>
-              <button onClick={logout} className="text-xs text-rose-400 flex items-center gap-1">
+            <div className="pt-2.5 border-t border-slate-800 flex items-center justify-between px-2">
+              <div>
+                <span className="text-xs font-bold text-white block">{user?.name || user?.username || 'Gerente'}</span>
+                <span className="text-[10px] text-emerald-400 font-semibold">{user?.role === 'admin' ? 'Administrador' : 'Operador'}</span>
+              </div>
+              <button onClick={logout} className="text-xs font-semibold text-rose-400 hover:text-rose-300 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-500/10">
                 <LogOut className="w-3.5 h-3.5" /> Sair
               </button>
             </div>

@@ -17,16 +17,16 @@ export async function seedDatabase() {
 
   // 1. Users
   const salt = bcrypt.genSaltSync(10);
-  const hashAdmin = bcrypt.hashSync('admin123', salt);
+  const hashGerente = bcrypt.hashSync('Civam123', salt);
   const hashOp = bcrypt.hashSync('123456', salt);
 
   run(
-    'INSERT INTO users (name, email, password_hash, role, active) VALUES (?, ?, ?, ?, 1)',
-    ['Administrador da Frota', 'admin@gcs.com.br', hashAdmin, 'admin']
+    'INSERT INTO users (username, name, email, password_hash, role, active) VALUES (?, ?, ?, ?, ?, 1)',
+    ['gerente', 'Gerente', 'gerente@gcs.com.br', hashGerente, 'admin']
   );
   run(
-    'INSERT INTO users (name, email, password_hash, role, active) VALUES (?, ?, ?, ?, 1)',
-    ['Carlos Frotista', 'operador@gcs.com.br', hashOp, 'operator']
+    'INSERT INTO users (username, name, email, password_hash, role, active) VALUES (?, ?, ?, ?, ?, 1)',
+    ['operador', 'Operador de Pista', 'operador@gcs.com.br', hashOp, 'operator']
   );
 
   // 2. Vehicles

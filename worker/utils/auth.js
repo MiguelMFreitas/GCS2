@@ -1,4 +1,4 @@
-// Edge-compatible JWT & Crypto Utilities for Cloudflare Workers
+// Edge-compatible JWT, Cookie & Crypto Utilities for Cloudflare Workers
 import bcrypt from 'bcryptjs';
 
 const DEFAULT_SECRET = 'gcs2-super-secure-jwt-key-2026';
@@ -73,22 +73,21 @@ export async function verifyToken(token, secret = DEFAULT_SECRET) {
   const [encodedHeader, encodedPayload, encodedSignature] = parts;
   const data = `${encodedHeader}.${encodedPayload}`;
 
-  const key = await getHmacKey(secret);
-  const enc = new TextEncoder();
-
-  // Convert base64url signature back to Uint8Array
-  let b64 = encodedSignature.replace(/-/g, '+').replace(/_/g, '/');
-  while (b64.length % 4) b64 += '=';
-  const binary = atob(b64);
-  const sigBytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    sigBytes[i] = binary.charCodeAt(i);
-  }
-
-  const isValid = await crypto.subtle.verify('HMAC', key, sigBytes, enc.encode(data));
-  if (!isValid) return null;
-
   try {
+    const key = await getHmacKey(secret);
+    const enc = new TextEncoder();
+
+    let b64 = encodedSignature.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    const binary = atob(b64);
+    const sigBytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      sigBytes[i] = binary.charCodeAt(i);
+    }
+
+    const isValid = await crypto.subtle.verify('HMAC', key, sigBytes, enc.encode(data));
+    if (!isValid) return null;
+
     const payload = JSON.parse(base64UrlDecode(encodedPayload));
     const now = Math.floor(Date.now() / 1000);
     if (payload.exp && payload.exp < now) {
@@ -100,8 +99,42 @@ export async function verifyToken(token, secret = DEFAULT_SECRET) {
   }
 }
 
+export function parseCookies(request) {
+  const cookieHeader = request.headers.get('Cookie') || '';
+  const cookies = {};
+  cookieHeader.split(';').forEach(cookie => {
+    const parts = cookie.split('=');
+    if (parts.length === 2) {
+      cookies[parts[0].trim()] = decodeURIComponent(parts[1].trim());
+    }
+  });
+  return cookies;
+}
+
+export function createSessionCookie(token, isSecure = false) {
+  const maxAge = 7 * 24 * 60 * 60; // 7 days in seconds
+  let cookie = `gcs2_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`;
+  if (isSecure) {
+    cookie += '; Secure';
+  }
+  return cookie;
+}
+
+export function clearSessionCookie(isSecure = false) {
+  let cookie = `gcs2_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+  if (isSecure) {
+    cookie += '; Secure';
+  }
+  return cookie;
+}
+
 export function comparePassword(password, hash) {
-  return bcrypt.compareSync(password, hash);
+  if (!password || !hash) return false;
+  try {
+    return bcrypt.compareSync(password, hash);
+  } catch (err) {
+    return false;
+  }
 }
 
 export function hashPassword(password) {

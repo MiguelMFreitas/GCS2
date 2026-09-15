@@ -9,14 +9,18 @@ import * as documentRoute from './routes/documents.js';
 import * as reportRoute from './routes/reports.js';
 import * as userRoute from './routes/users.js';
 import * as uploadRoute from './routes/upload.js';
-import { verifyToken } from './utils/auth.js';
+import { verifyToken, parseCookies } from './utils/auth.js';
 
-function addCorsHeaders(response) {
+function addCorsHeaders(response, request) {
   const newHeaders = new Headers(response.headers);
-  newHeaders.set('Access-Control-Allow-Origin', '*');
+  const origin = request.headers.get('Origin') || '*';
+  
+  newHeaders.set('Access-Control-Allow-Origin', origin);
+  newHeaders.set('Access-Control-Allow-Credentials', 'true');
   newHeaders.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  newHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  newHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cookie');
   newHeaders.set('Access-Control-Max-Age', '86400');
+  
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
@@ -32,12 +36,14 @@ export default {
 
     // 1. Handle CORS Preflight
     if (method === 'OPTIONS') {
+      const origin = request.headers.get('Origin') || '*';
       return new Response(null, {
         status: 204,
         headers: {
-          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Origin': origin,
+          'Access-Control-Allow-Credentials': 'true',
           'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Cookie',
           'Access-Control-Max-Age': '86400'
         }
       });
@@ -48,13 +54,13 @@ export default {
       if (pathname.startsWith('/uploads/')) {
         const filename = pathname.replace('/uploads/', '');
         const fileResponse = await uploadRoute.serveFile(request, env, filename);
-        return addCorsHeaders(fileResponse);
+        return addCorsHeaders(fileResponse, request);
       }
 
       // 3. API Routes Handling
       if (pathname.startsWith('/api/')) {
         const apiResponse = await handleApiRoute(request, env, pathname, method);
-        return addCorsHeaders(apiResponse);
+        return addCorsHeaders(apiResponse, request);
       }
 
       // 4. Static Assets Handling for SPA Frontend
@@ -66,7 +72,7 @@ export default {
     } catch (err) {
       console.error('Unhandled Worker Error:', err);
       const errorResponse = Response.json({ error: 'Erro interno no servidor Cloudflare Worker.', details: err.message }, { status: 500 });
-      return addCorsHeaders(errorResponse);
+      return addCorsHeaders(errorResponse, request);
     }
   }
 };
@@ -76,22 +82,36 @@ async function handleApiRoute(request, env, pathname, method) {
   if (method === 'POST' && pathname === '/api/auth/login') {
     return await authRoute.login(request, env);
   }
+  if (method === 'POST' && pathname === '/api/auth/logout') {
+    return await authRoute.logout(request, env);
+  }
   if (method === 'POST' && pathname === '/api/auth/forgot-password') {
     return await authRoute.resetPassword(request, env);
   }
 
-  // Extract and verify Bearer Token for protected routes
-  const authHeader = request.headers.get('Authorization') || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  // Extract token from Cookie or Authorization header
+  const cookies = parseCookies(request);
+  let token = cookies['gcs2_session'] || null;
+
+  if (!token) {
+    const authHeader = request.headers.get('Authorization') || '';
+    if (authHeader.startsWith('Bearer ')) {
+      token = authHeader.slice(7);
+    }
+  }
+
   const user = token ? await verifyToken(token, env.JWT_SECRET) : null;
 
   if (!user) {
-    return Response.json({ error: 'Acesso negado. Sessão inválida ou expirada.' }, { status: 401 });
+    return Response.json({ error: 'Acesso negado. Sessão inválida ou ausente.' }, { status: 401 });
   }
 
-  // --- Authenticated User Profile ---
+  // --- Authenticated User Profile & Password ---
   if (method === 'GET' && pathname === '/api/auth/me') {
     return await authRoute.getMe(request, env, user);
+  }
+  if (method === 'POST' && (pathname === '/api/auth/change-password' || pathname === '/api/auth/password')) {
+    return await authRoute.changePassword(request, env, user);
   }
 
   // --- Uploads (Cloudflare R2) ---

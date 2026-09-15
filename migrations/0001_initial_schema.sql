@@ -7,12 +7,15 @@
 -- 1. TABELA DE USUÁRIOS
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT UNIQUE,
   name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'operator',
   active INTEGER NOT NULL DEFAULT 1,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  last_login_at DATETIME
 );
 
 -- 2. TABELA DE VEÍCULOS
@@ -171,6 +174,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 -- ==============================================================================
 -- ÍNDICES DE PERFORMANCE E INTEGRIDADE
 -- ==============================================================================
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_vehicles_plate ON vehicles(plate);
 CREATE INDEX IF NOT EXISTS idx_vehicles_status ON vehicles(status);
 CREATE INDEX IF NOT EXISTS idx_fueling_sessions_status ON fueling_sessions(status);

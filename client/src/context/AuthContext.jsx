@@ -5,51 +5,71 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('gcs2_user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('gcs2_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
   });
-  const [token, setToken] = useState(() => localStorage.getItem('gcs2_token') || null);
   const [loading, setLoading] = useState(true);
 
+  // Validate session with backend on initial load and refresh (F5)
   useEffect(() => {
-    if (token) {
-      authService.getMe()
-        .then((res) => {
+    authService.getMe()
+      .then((res) => {
+        if (res.data?.authenticated && res.data?.user) {
           setUser(res.data.user);
           localStorage.setItem('gcs2_user', JSON.stringify(res.data.user));
-        })
-        .catch(() => {
-          logout();
-        })
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
-  }, [token]);
+        } else {
+          setUser(null);
+          localStorage.removeItem('gcs2_user');
+          localStorage.removeItem('gcs2_token');
+        }
+      })
+      .catch(() => {
+        setUser(null);
+        localStorage.removeItem('gcs2_user');
+        localStorage.removeItem('gcs2_token');
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, []);
 
-  const login = async (usernameOrEmail, password) => {
+  const login = async (username, password) => {
     const res = await authService.login({
-      email: usernameOrEmail,
-      username: usernameOrEmail,
+      username: (username || '').trim(),
+      email: (username || '').trim(),
       password,
     });
-    const { token: newToken, user: newUser } = res.data;
-    localStorage.setItem('gcs2_token', newToken);
+    
+    const { token, user: newUser } = res.data;
+    if (token) {
+      localStorage.setItem('gcs2_token', token);
+    }
     localStorage.setItem('gcs2_user', JSON.stringify(newUser));
-    setToken(newToken);
     setUser(newUser);
-    return newUser;
+    return res.data;
   };
 
-  const logout = () => {
-    localStorage.removeItem('gcs2_token');
-    localStorage.removeItem('gcs2_user');
-    setToken(null);
-    setUser(null);
+  const logout = async () => {
+    try {
+      await authService.logout();
+    } catch (err) {
+      // Ignore network errors on logout
+    } finally {
+      localStorage.removeItem('gcs2_token');
+      localStorage.removeItem('gcs2_user');
+      setUser(null);
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isAuthenticated: !!token, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, loading, login, logout, setUser }}>
       {children}
     </AuthContext.Provider>
   );
