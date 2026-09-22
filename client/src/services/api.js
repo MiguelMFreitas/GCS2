@@ -91,7 +91,7 @@ export const documentService = {
 };
 
 export const reportService = {
-  getDashboard: () => api.get('/dashboard/summary'),
+  getDashboard: (params) => api.get('/dashboard/summary', { params }),
   getFleetReports: (params) => api.get('/reports/fleet', { params }),
   getExcelExportUrl: (sessionId) => `/api/reports/session/${sessionId}/excel`,
 };

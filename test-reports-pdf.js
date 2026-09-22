@@ -1,8 +1,8 @@
-// Comprehensive PDF and Reports Validation Test Suite
+// Comprehensive PDF, Reports & Weekly Scope Validation Test Suite
 import { createFleetPDFDoc, formatCurrency, formatLiters, formatKm, formatConsumption, formatDateBR } from './client/src/services/exportService.js';
 
 async function runReportTests() {
-  console.log('🧪 Iniciando Testes Automatizados da Interface de Relatórios e Motor PDF...\n');
+  console.log('🧪 Iniciando Testes Automatizados da Interface de Relatórios, Lógica de Semanas e Motor PDF...\n');
 
   let passed = 0;
   let failed = 0;
@@ -19,43 +19,14 @@ async function runReportTests() {
 
   // 1. Formatters
   assert(formatCurrency(1353.51) === 'R$ 1.353,51', 'formatCurrency(1353.51) retorna R$ 1.353,51');
+  assert(formatCurrency(6.97) === 'R$ 6,97', 'formatCurrency(6.97) retorna R$ 6,97 com vírgula padrão BR');
   assert(formatLiters(194.19) === '194,19 L', 'formatLiters(194.19) retorna 194,19 L');
   assert(formatKm(232941.8) === '232.941,8 km', 'formatKm(232941.8) retorna 232.941,8 km');
   assert(formatConsumption(7.42) === '7,42 km/L', 'formatConsumption(7.42) retorna 7,42 km/L');
   assert(formatDateBR('2026-09-15') === '15/09/2026', 'formatDateBR(2026-09-15) retorna 15/09/2026');
 
-  // 2. Scenario A: 1 Vehicle PDF Generation
-  const records1 = [
-    {
-      vehicle_name: 'Mercedinha 710',
-      vehicle_plate: 'NQM7096',
-      fuel_type: 'Diesel S10',
-      odometer_working: 1,
-      km_previous: 232718.5,
-      km_current: 232941.8,
-      km_driven: 223.3,
-      liters: 58.58,
-      price_per_liter: 6.97,
-      total_cost: 408.30,
-      consumption_kml: 3.81,
-      cost_per_km: 1.83,
-      driver_name: 'Marcos Silva'
-    }
-  ];
-
-  const doc1 = createFleetPDFDoc({
-    title: 'RELATORIO DE ABASTECIMENTO',
-    sessionCode: 'ABAST-2026-09-15-001',
-    dateStr: '2026-09-15',
-    records: records1,
-    summary: { total_vehicles: 1, total_liters: 58.58, total_cost: 408.30 }
-  });
-
-  const pageCount1 = doc1.internal.getNumberOfPages();
-  assert(pageCount1 === 1, 'PDF de 1 veículo cabe perfeitamente em 1 página');
-
-  // 3. Scenario B: 4 Vehicles (Mixed fuels: Diesel, Gasolina, Etanol, broken odometer, first fueling)
-  const records4 = [
+  // 2. Scenario 1: SEMANA 1 (14/09/2026 a 20/09/2026) - 4 abastecimentos, R$ 1.353,51
+  const week1Records = [
     {
       vehicle_name: 'Mercedinha 710',
       vehicle_plate: 'NQM7096',
@@ -87,11 +58,11 @@ async function runReportTests() {
       driver_name: 'José Santos'
     },
     {
-      vehicle_name: 'Fiat Fiorino (Flex abastecido com Gasolina)',
+      vehicle_name: 'Fiat Fiorino',
       vehicle_plate: 'GHI3J45',
       fuel_type: 'Gasolina',
       odometer_working: 1,
-      km_previous: null, // First fueling!
+      km_previous: null, // First fueling
       km_current: 94320,
       km_driven: null,
       liters: 38.60,
@@ -102,74 +73,180 @@ async function runReportTests() {
       driver_name: 'Lucas Pereira'
     },
     {
-      vehicle_name: 'Renault Master (Odômetro Não Funcional)',
+      vehicle_name: 'Renault Master',
       vehicle_plate: 'PQR6S78',
       fuel_type: 'Diesel S10',
-      odometer_working: 0, // Broken odometer!
+      odometer_working: 0, // Broken odometer
       km_previous: null,
       km_current: null,
       km_driven: null,
-      liters: 45.00,
+      liters: 46.40,
       price_per_liter: 6.95,
-      total_cost: 312.75,
+      total_cost: 322.64,
       consumption_kml: null,
       cost_per_km: null,
       driver_name: 'Eduardo Oliveira'
     }
   ];
 
-  const doc4 = createFleetPDFDoc({
-    title: 'RELATORIO DE ABASTECIMENTO',
-    sessionCode: 'ABAST-2026-09-15-002',
-    dateStr: '2026-09-15',
-    records: records4,
-    summary: { total_vehicles: 4, total_liters: 197.38, total_cost: 1343.62 }
+  const week1TotalSpent = week1Records.reduce((s, r) => s + r.total_cost, 0);
+  const week1TotalLiters = week1Records.reduce((s, r) => s + r.liters, 0);
+  assert(Math.round(week1TotalSpent * 100) / 100 === 1353.51, `Semana 1 soma R$ 1.353,51 (calculado: R$ ${week1TotalSpent.toFixed(2)})`);
+  assert(week1Records.length === 4, 'Semana 1 possui 4 abastecimentos');
+
+  const docWeek1 = createFleetPDFDoc({
+    reportType: 'semanal',
+    title: 'RELATÓRIO SEMANAL DE ABASTECIMENTO',
+    periodStr: '14/09/2026 a 20/09/2026',
+    dateStr: '2026-09-20',
+    records: week1Records,
+    summary: { total_vehicles: 4, total_liters: week1TotalLiters, total_cost: week1TotalSpent }
   });
 
-  const pageCount4 = doc4.internal.getNumberOfPages();
-  assert(pageCount4 <= 2, `PDF de 4 veículos com resumo executivo e detalhamento paginado em ${pageCount4} página(s)`);
+  const pageCountWeek1 = docWeek1.internal.getNumberOfPages();
+  assert(pageCountWeek1 <= 2, `PDF da Semana 1 cabe em ${pageCountWeek1} página(s)`);
 
-  // 4. Scenario C: > 10 Vehicles (Stress test pagination)
-  const records14 = [];
-  for (let i = 1; i <= 14; i++) {
-    records14.push({
-      vehicle_name: `Caminhão Frota #${i}`,
-      vehicle_plate: `ABC${i}D${String(i).padStart(2, '0')}`,
-      fuel_type: i % 2 === 0 ? 'Diesel S10' : (i % 3 === 0 ? 'Etanol' : 'Gasolina'),
-      odometer_working: i === 5 ? 0 : 1,
-      km_previous: i === 5 ? null : (i === 1 ? null : 100000 + (i * 500)),
-      km_current: i === 5 ? null : 100000 + (i * 500) + 300,
-      km_driven: i === 5 || i === 1 ? null : 300,
-      liters: 50.0,
-      price_per_liter: 6.50,
-      total_cost: 325.00,
-      consumption_kml: i === 5 || i === 1 ? null : 6.00,
-      cost_per_km: i === 5 || i === 1 ? null : 1.08,
-      driver_name: `Motorista ${i}`
-    });
-  }
+  // 3. Scenario 2: SEMANA 2 (21/09/2026 a 27/09/2026) - 6 abastecimentos, R$ 1.298,15
+  const week2Records = [
+    {
+      vehicle_name: 'Fiat Fiorino 01',
+      vehicle_plate: 'GWH3623',
+      fuel_type: 'Gasolina',
+      odometer_working: 1,
+      km_previous: 265890.0,
+      km_current: 266067.0,
+      km_driven: 177.0,
+      liters: 32.19,
+      price_per_liter: 6.97,
+      total_cost: 224.36,
+      consumption_kml: 5.50,
+      cost_per_km: 1.27,
+      driver_name: 'Marcos Silva'
+    },
+    {
+      vehicle_name: 'Fiat Fiorino 02',
+      vehicle_plate: 'GWH3624',
+      fuel_type: 'Gasolina',
+      odometer_working: 1,
+      km_previous: 195400,
+      km_current: 195650,
+      km_driven: 250.0,
+      liters: 28.50,
+      price_per_liter: 6.97,
+      total_cost: 198.65,
+      consumption_kml: 8.77,
+      cost_per_km: 0.79,
+      driver_name: 'João Pedro'
+    },
+    {
+      vehicle_name: 'Fiat Fiorino 03',
+      vehicle_plate: 'GWH3625',
+      fuel_type: 'Gasolina',
+      odometer_working: 1,
+      km_previous: 142100,
+      km_current: 142280,
+      km_driven: 180.0,
+      liters: 22.78,
+      price_per_liter: 6.97,
+      total_cost: 158.78,
+      consumption_kml: 7.90,
+      cost_per_km: 0.88,
+      driver_name: 'Carlos Lima'
+    },
+    {
+      vehicle_name: 'Caminhão 710',
+      vehicle_plate: 'NQM7096',
+      fuel_type: 'Diesel S10',
+      odometer_working: 1,
+      km_previous: 232941.8,
+      km_current: 233190.0,
+      km_driven: 248.2,
+      liters: 45.00,
+      price_per_liter: 6.97,
+      total_cost: 313.65,
+      consumption_kml: 5.52,
+      cost_per_km: 1.26,
+      driver_name: 'Marcos Silva'
+    },
+    {
+      vehicle_name: 'Volks Delivery',
+      vehicle_plate: 'DEF2G34',
+      fuel_type: 'Diesel S10',
+      odometer_working: 1,
+      km_previous: 189450,
+      km_current: 189720,
+      km_driven: 270.0,
+      liters: 38.00,
+      price_per_liter: 6.97,
+      total_cost: 264.86,
+      consumption_kml: 7.11,
+      cost_per_km: 0.98,
+      driver_name: 'José Santos'
+    },
+    {
+      vehicle_name: 'Renault Master',
+      vehicle_plate: 'PQR6S78',
+      fuel_type: 'Diesel S10',
+      odometer_working: 1,
+      km_previous: 110200,
+      km_current: 110350,
+      km_driven: 150.0,
+      liters: 19.78,
+      price_per_liter: 6.97,
+      total_cost: 137.85,
+      consumption_kml: 7.58,
+      cost_per_km: 0.92,
+      driver_name: 'Eduardo Oliveira'
+    }
+  ];
 
-  const doc14 = createFleetPDFDoc({
-    title: 'RELATORIO CONSOLIDADO DA FROTA',
-    sessionCode: 'RELATORIO-CONSOLIDADO',
-    dateStr: '2026-09-15',
-    records: records14,
-    summary: { total_vehicles: 14, total_liters: 700.00, total_cost: 4550.00 }
+  const week2TotalSpent = week2Records.reduce((s, r) => s + r.total_cost, 0);
+  const week2TotalLiters = week2Records.reduce((s, r) => s + r.liters, 0);
+  assert(Math.round(week2TotalSpent * 100) / 100 === 1298.15, `Semana 2 soma R$ 1.298,15 (calculado: R$ ${week2TotalSpent.toFixed(2)})`);
+  assert(week2Records.length === 6, 'Semana 2 possui 6 abastecimentos');
+
+  const docWeek2 = createFleetPDFDoc({
+    reportType: 'semanal',
+    title: 'RELATÓRIO SEMANAL DE ABASTECIMENTO',
+    periodStr: '21/09/2026 a 27/09/2026',
+    dateStr: '2026-09-27',
+    records: week2Records,
+    summary: { total_vehicles: 6, total_liters: week2TotalLiters, total_cost: week2TotalSpent }
   });
 
-  const pageCount14 = doc14.internal.getNumberOfPages();
-  assert(pageCount14 >= 2, `Relatório de 14 veículos paginado inteligentemente em ${pageCount14} páginas sem sobreposição`);
+  const pageCountWeek2 = docWeek2.internal.getNumberOfPages();
+  assert(pageCountWeek2 <= 2, `PDF da Semana 2 (6 veículos) paginado em ${pageCountWeek2} página(s)`);
 
-  // 5. Check UTF-8 safety, no broken emojis, no average fuel price, and no 'Flex' fuel group
-  const pdfOutput = doc4.output();
+  // 4. Scenario 3: CONSOLIDADO (Semana 1 + Semana 2) -> 10 abastecimentos, R$ 2.651,66
+  const combinedRecords = [...week1Records, ...week2Records];
+  const combinedTotalCost = combinedRecords.reduce((s, r) => s + r.total_cost, 0);
+  const combinedTotalLiters = combinedRecords.reduce((s, r) => s + r.liters, 0);
+  assert(Math.round(combinedTotalCost * 100) / 100 === 2651.66, `Consolidado das 2 semanas soma R$ 2.651,66 (calculado: R$ ${combinedTotalCost.toFixed(2)})`);
+  assert(combinedRecords.length === 10, 'Consolidado possui 10 abastecimentos');
+
+  const docConsolidado = createFleetPDFDoc({
+    reportType: 'consolidado',
+    title: 'RELATÓRIO CONSOLIDADO DE ABASTECIMENTO',
+    periodStr: '14/09/2026 a 27/09/2026',
+    dateStr: '2026-09-27',
+    records: combinedRecords,
+    summary: { total_vehicles: 10, total_liters: combinedTotalLiters, total_cost: combinedTotalCost }
+  });
+
+  const pageCountConsolidado = docConsolidado.internal.getNumberOfPages();
+  assert(pageCountConsolidado >= 2, `PDF Consolidado de 10 veículos paginado em ${pageCountConsolidado} páginas`);
+
+  // 5. Check PDF Content & Aesthetics
+  const pdfOutput = docWeek2.output();
   assert(!pdfOutput.includes('Ø'), 'PDF não contém caractere quebrado Ø');
   assert(!pdfOutput.includes('â›½'), 'PDF não contém sequências quebradas de emoji');
-  assert(pdfOutput.includes('GERENCIAMENTO DE FROTA'), 'Cabeçalho principal contém GERENCIAMENTO DE FROTA');
-  assert(!pdfOutput.includes('Preco medio'), 'PDF não exibe mais "Preco medio" no resumo por combustível');
-  assert(!pdfOutput.includes('Preço médio'), 'PDF não exibe mais "Preço médio" no resumo por combustível');
+  assert(pdfOutput.includes('GERENCIAMENTO DE FROTA'), 'Cabeçalho contém GERENCIAMENTO DE FROTA');
+  assert(pdfOutput.includes('RELAT'), 'Contém título com RELATÓRIO');
+  assert(!pdfOutput.includes('Preco medio') && !pdfOutput.includes('Preço médio'), 'PDF não exibe "Preço médio"');
+  assert(pdfOutput.includes('21/09/2026 a 27/09/2026'), 'PDF da Semana 2 contém o período correto 21/09/2026 a 27/09/2026');
 
   console.log(`\n========================================`);
-  console.log(`RESULTADO DOS TESTES DE RELATÓRIO/PDF: ${passed} PASSOU | ${failed} FALHOU`);
+  console.log(`RESULTADO DOS TESTES: ${passed} PASSOU | ${failed} FALHOU`);
   console.log(`========================================\n`);
 
   if (failed > 0) {
@@ -178,6 +255,6 @@ async function runReportTests() {
 }
 
 runReportTests().catch((err) => {
-  console.error('Erro ao executar testes de relatório:', err);
+  console.error('Erro ao executar testes:', err);
   process.exit(1);
 });

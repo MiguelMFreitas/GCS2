@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 const jsPDF = jsPDFModule.jsPDF || jsPDFModule;
 
 // ==============================================================================
-// Brazilian Formatting Utilities
+// Brazilian Formatting Utilities (pt-BR)
 // ==============================================================================
 export function formatCurrency(value) {
   if (value === null || value === undefined || isNaN(value)) return 'R$ 0,00';
@@ -38,7 +38,7 @@ export function formatDateBR(dateStr) {
   return dateStr;
 }
 
-// Compute fuel summary grouped strictly by actual fuel used (No 'Flex' allowed - Item 39)
+// Compute fuel summary grouped strictly by actual fuel used (never 'Flex')
 function computeFuelSummary(records, providedSummary) {
   if (providedSummary?.fuels && providedSummary.fuels.length > 0) {
     return providedSummary.fuels.map(f => ({
@@ -61,9 +61,17 @@ function computeFuelSummary(records, providedSummary) {
 }
 
 // ==============================================================================
-// Master PDF Generator Engine (Corporate Fleet Executive Theme)
+// Master PDF Generator Engine (Executive Corporate Report Diagramming)
 // ==============================================================================
-export function createFleetPDFDoc({ title = 'RELATÓRIO DE ABASTECIMENTO', sessionCode, dateStr, records = [], summary = {} }) {
+export function createFleetPDFDoc({
+  reportType = 'semanal', // 'semanal' | 'consolidado' | 'individual'
+  title = 'RELATÓRIO SEMANAL DE ABASTECIMENTO',
+  sessionCode = null,
+  periodStr = null,
+  dateStr = null,
+  records = [],
+  summary = {}
+}) {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -75,7 +83,7 @@ export function createFleetPDFDoc({ title = 'RELATÓRIO DE ABASTECIMENTO', sessi
   const margin = 12;
   const contentWidth = pageWidth - (margin * 2);
 
-  // Executive Color Palette
+  // Executive Clean Palette
   const darkNavy = [15, 23, 42];        // #0f172a
   const slateBorder = [226, 232, 240];  // #e2e8f0
   const bgCard = [248, 250, 252];       // #f8fafc
@@ -85,10 +93,15 @@ export function createFleetPDFDoc({ title = 'RELATÓRIO DE ABASTECIMENTO', sessi
   const blueBrand = [2, 132, 199];      // #0284c7
   const amberWarning = [217, 119, 6];   // #d97706
 
-  const formattedDate = formatDateBR(dateStr);
+  const now = new Date();
+  const generationDateStr = now.toLocaleDateString('pt-BR');
+  const generationTimeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const generationFullStr = `${generationDateStr} às ${generationTimeStr}`;
+
+  const formattedPeriod = periodStr || (dateStr ? formatDateBR(dateStr) : generationDateStr);
   let yPos = 12;
 
-  // Helper for adding new page with header
+  // Helper for adding new page with mini header
   function checkPageBreak(neededHeight) {
     if (yPos + neededHeight > pageHeight - 16) {
       doc.addPage();
@@ -103,101 +116,121 @@ export function createFleetPDFDoc({ title = 'RELATÓRIO DE ABASTECIMENTO', sessi
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
-    doc.text('GERENCIAMENTO DE FROTA • RELATORIO DE ABASTECIMENTO', margin + 4, yPos + 5.5);
+    doc.text(`GERENCIAMENTO DE FROTA • ${title.toUpperCase()}`, margin + 4, yPos + 5.5);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(203, 213, 225);
-    doc.text(`${sessionCode ? `Sessao: ${sessionCode}  •  ` : ''}${formattedDate}`, pageWidth - margin - 4, yPos + 5.5, { align: 'right' });
+    doc.text(`Período: ${formattedPeriod}`, pageWidth - margin - 4, yPos + 5.5, { align: 'right' });
     yPos += 13;
   }
 
   // ==============================================================================
-  // 1. TOP HEADER (First Page)
+  // 1. TOP HEADER (Page 1 - Corporate Clean Box)
   // ==============================================================================
   doc.setFillColor(...darkNavy);
   doc.roundedRect(margin, yPos, contentWidth, 24, 2.5, 2.5, 'F');
 
+  // Left Title
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
-  doc.text('GERENCIAMENTO DE FROTA', margin + 6, yPos + 9);
+  doc.text('GERENCIAMENTO DE FROTA', margin + 6, yPos + 8.5);
 
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(203, 213, 225);
-  doc.text(title || 'Relatorio de Abastecimento', margin + 6, yPos + 17);
+  doc.text(title, margin + 6, yPos + 17);
 
-  // Right Header Info
-  doc.setFontSize(9);
+  // Right Header Info (Separated & Organized)
+  doc.setFontSize(8.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(255, 255, 255);
-  doc.text(`Data: ${formattedDate}`, pageWidth - margin - 6, yPos + 9, { align: 'right' });
+  doc.text(`Período: ${formattedPeriod}`, pageWidth - margin - 6, yPos + 8.5, { align: 'right' });
 
-  doc.setFontSize(8.5);
+  doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(110, 231, 183); // Light emerald
-  const totalVehiclesCount = summary?.total_vehicles || records.length || 0;
-  const sessionText = sessionCode ? `Sessao: ${sessionCode} • ` : '';
-  doc.text(`${sessionText}${totalVehiclesCount} ${totalVehiclesCount === 1 ? 'veiculo abastecido' : 'veiculos abastecidos'}`, pageWidth - margin - 6, yPos + 17, { align: 'right' });
+  doc.setTextColor(148, 163, 184);
+  const extraInfo = sessionCode ? `Sessão: ${sessionCode} • ` : '';
+  doc.text(`${extraInfo}Gerado em: ${generationFullStr}`, pageWidth - margin - 6, yPos + 17, { align: 'right' });
 
   yPos += 28;
 
   // ==============================================================================
-  // 2. EXECUTIVE SUMMARY: 3 CARDS
+  // 2. RESUMO EXECUTIVO: 4 CARDS (Requirement 11)
   // ==============================================================================
-  const colWidth = (contentWidth - 8) / 3;
-  const totalLitersVal = Number(summary?.total_liters || 0);
-  const totalCostVal = Number(summary?.total_cost || 0);
+  const totalVehiclesCount = summary?.total_vehicles || new Set(records.map(r => r.vehicle_id || r.vehicle_plate)).size || records.length;
+  const totalFuelingsCount = records.length || totalVehiclesCount;
+  const totalLitersVal = Number(summary?.total_liters || records.reduce((s, r) => s + Number(r.liters || 0), 0));
+  const totalCostVal = Number(summary?.total_cost || records.reduce((s, r) => s + Number(r.total_cost || 0), 0));
 
-  // Card 1: Veículos Abastecidos
+  const cardSpacing = 3;
+  const colWidth = (contentWidth - (cardSpacing * 3)) / 4;
+
+  // Card 1: VEÍCULOS ABASTECIDOS
   doc.setFillColor(...bgCard);
   doc.setDrawColor(...slateBorder);
   doc.roundedRect(margin, yPos, colWidth, 18, 2, 2, 'FD');
-  doc.setFontSize(7.5);
+  doc.setFontSize(6.8);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...textMuted);
-  doc.text('VEICULOS ABASTECIDOS', margin + 4, yPos + 5.5);
-  doc.setFontSize(12);
+  doc.text('VEÍCULOS ABASTECIDOS', margin + 3.5, yPos + 5.5);
+  doc.setFontSize(11.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...textDark);
-  doc.text(`${totalVehiclesCount}`, margin + 4, yPos + 13.5);
+  doc.text(`${totalVehiclesCount}`, margin + 3.5, yPos + 13.5);
 
-  // Card 2: Total de Litros
+  // Card 2: TOTAL DE ABASTECIMENTOS
+  const xCard2 = margin + colWidth + cardSpacing;
   doc.setFillColor(...bgCard);
   doc.setDrawColor(...slateBorder);
-  doc.roundedRect(margin + colWidth + 4, yPos, colWidth, 18, 2, 2, 'FD');
-  doc.setFontSize(7.5);
+  doc.roundedRect(xCard2, yPos, colWidth, 18, 2, 2, 'FD');
+  doc.setFontSize(6.8);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...textMuted);
-  doc.text('TOTAL DE LITROS', margin + colWidth + 8, yPos + 5.5);
-  doc.setFontSize(12);
+  doc.text('TOTAL ABASTECIMENTOS', xCard2 + 3.5, yPos + 5.5);
+  doc.setFontSize(11.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...textDark);
+  doc.text(`${totalFuelingsCount}`, xCard2 + 3.5, yPos + 13.5);
+
+  // Card 3: TOTAL DE LITROS
+  const xCard3 = margin + ((colWidth + cardSpacing) * 2);
+  doc.setFillColor(...bgCard);
+  doc.setDrawColor(...slateBorder);
+  doc.roundedRect(xCard3, yPos, colWidth, 18, 2, 2, 'FD');
+  doc.setFontSize(6.8);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...textMuted);
+  doc.text('TOTAL DE LITROS', xCard3 + 3.5, yPos + 5.5);
+  doc.setFontSize(11.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...blueBrand);
-  doc.text(formatLiters(totalLitersVal), margin + colWidth + 8, yPos + 13.5);
+  doc.text(formatLiters(totalLitersVal), xCard3 + 3.5, yPos + 13.5);
 
-  // Card 3: Valor Total (Destacado em Verde Executivo)
+  // Card 4: VALOR TOTAL (Destaque Emerald)
+  const xCard4 = margin + ((colWidth + cardSpacing) * 3);
   doc.setFillColor(236, 253, 245); // Emerald 50
   doc.setDrawColor(167, 243, 208); // Emerald 200
-  doc.roundedRect(margin + (colWidth * 2) + 8, yPos, colWidth, 18, 2, 2, 'FD');
-  doc.setFontSize(7.5);
+  doc.roundedRect(xCard4, yPos, colWidth, 18, 2, 2, 'FD');
+  doc.setFontSize(6.8);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(6, 95, 70); // Emerald 800
-  doc.text('VALOR TOTAL', margin + (colWidth * 2) + 12, yPos + 5.5);
-  doc.setFontSize(12);
+  doc.text('VALOR TOTAL', xCard4 + 3.5, yPos + 5.5);
+  doc.setFontSize(11.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...emeraldBrand);
-  doc.text(formatCurrency(totalCostVal), margin + (colWidth * 2) + 12, yPos + 13.5);
+  doc.text(formatCurrency(totalCostVal), xCard4 + 3.5, yPos + 13.5);
 
   yPos += 22;
 
   // ==============================================================================
-  // 3. RESUMO POR COMBUSTÍVEL
+  // 3. RESUMO POR COMBUSTÍVEL (Requirement 12)
   // ==============================================================================
   const fuels = computeFuelSummary(records, summary);
   if (fuels.length > 0) {
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...darkNavy);
-    doc.text('RESUMO POR COMBUSTIVEL', margin, yPos);
+    doc.text('RESUMO POR COMBUSTÍVEL', margin, yPos);
     yPos += 3.5;
 
     const fuelCardCount = Math.min(fuels.length, 3);
@@ -206,71 +239,41 @@ export function createFleetPDFDoc({ title = 'RELATÓRIO DE ABASTECIMENTO', sessi
     fuels.forEach((fuel, idx) => {
       const isDiesel = fuel.name.toUpperCase().includes('DIESEL');
       const isGasolina = fuel.name.toUpperCase().includes('GASOLINA');
-      const xCard = margin + (idx * (fuelCardWidth + 4));
+      const xFuel = margin + (idx * (fuelCardWidth + 4));
 
       doc.setFillColor(...bgCard);
       doc.setDrawColor(...slateBorder);
-      doc.roundedRect(xCard, yPos, fuelCardWidth, 20, 2, 2, 'FD');
+      doc.roundedRect(xFuel, yPos, fuelCardWidth, 19, 2, 2, 'FD');
 
       // Fuel Name Header
       doc.setFontSize(8.5);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(isDiesel ? 22 : (isGasolina ? 2 : 180), isDiesel ? 101 : (isGasolina ? 132 : 83), isDiesel ? 52 : (isGasolina ? 199 : 9));
-      doc.text(fuel.name.toUpperCase(), xCard + 4, yPos + 6);
+      doc.text(fuel.name.toUpperCase(), xFuel + 4, yPos + 5.5);
 
       // Vehicles & Liters
       doc.setFontSize(7.5);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(...textDark);
-      doc.text(`${fuel.count} ${fuel.count === 1 ? 'veiculo' : 'veiculos'}  •  ${formatLiters(fuel.liters)}`, xCard + 4, yPos + 11.5);
+      doc.text(`${fuel.count} ${fuel.count === 1 ? 'veículo' : 'veículos'}  •  ${formatLiters(fuel.liters)}`, xFuel + 4, yPos + 11);
 
       // Subtotal Cost
       doc.setFontSize(8);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...emeraldBrand);
-      doc.text(`${formatCurrency(fuel.total_cost)} gastos`, xCard + 4, yPos + 16.5);
+      doc.text(`${formatCurrency(fuel.total_cost)} gastos`, xFuel + 4, yPos + 16);
     });
 
     yPos += 24;
   }
 
   // ==============================================================================
-  // 4. TOTAL DO ABASTECIMENTO (Destaque Consolidado)
-  // ==============================================================================
-  doc.setFillColor(...darkNavy);
-  doc.setDrawColor(30, 41, 59);
-  doc.roundedRect(margin, yPos, contentWidth, 19, 2.5, 2.5, 'FD');
-
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  doc.text('TOTAL DO ABASTECIMENTO', margin + 6, yPos + 7);
-
-  // Fuel breakdown summary text
-  const fuelSummaryLine = fuels.map(f => `${f.name}: ${formatLiters(f.liters)} — ${formatCurrency(f.total_cost)}`).join('   |   ');
-  doc.setFontSize(7.5);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(203, 213, 225);
-  doc.text(fuelSummaryLine || `Total de Litros: ${formatLiters(totalLitersVal)}`, margin + 6, yPos + 14);
-
-  // Right Total
-  doc.setFontSize(7.5);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(110, 231, 183);
-  doc.text('VALOR TOTAL:', pageWidth - margin - 6, yPos + 7, { align: 'right' });
-  doc.setFontSize(12);
-  doc.setTextColor(110, 231, 183);
-  doc.text(formatCurrency(totalCostVal), pageWidth - margin - 6, yPos + 14.5, { align: 'right' });
-
-  yPos += 24;
-
-  // ==============================================================================
-  // 5. DETALHAMENTO POR VEÍCULO EM CARDS INDIVIDUAIS
+  // 4. DETALHAMENTO POR VEÍCULO (3 COLUNAS - Requirements 14, 15, 16, 17, 18, 19)
   // ==============================================================================
   doc.setFontSize(9.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...darkNavy);
-  doc.text(`DETALHAMENTO POR VEICULO (${records.length} VEICULOS ABASTECIDOS)`, margin, yPos);
+  doc.text(`DETALHAMENTO POR VEÍCULO (${records.length} ABASTECIMENTOS)`, margin, yPos);
   yPos += 4;
 
   records.forEach((r, idx) => {
@@ -298,7 +301,7 @@ export function createFleetPDFDoc({ title = 'RELATÓRIO DE ABASTECIMENTO', sessi
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...darkNavy);
     const vehicleNum = String(idx + 1).padStart(2, '0');
-    doc.text(`${vehicleNum} — ${(r.vehicle_name || 'VEICULO').toUpperCase()}`, margin + 4, yPos + 5.2);
+    doc.text(`${vehicleNum} — ${(r.vehicle_name || 'VEÍCULO').toUpperCase()}`, margin + 4, yPos + 5.2);
 
     // Plate
     doc.setFontSize(8);
@@ -308,7 +311,7 @@ export function createFleetPDFDoc({ title = 'RELATÓRIO DE ABASTECIMENTO', sessi
 
     // Fuel Type
     doc.setFont('helvetica', 'normal');
-    doc.text(`Combustivel: ${r.fuel_type || 'Diesel'}`, margin + 110, yPos + 5.2);
+    doc.text(`Combustível: ${r.fuel_type || 'Diesel'}`, margin + 110, yPos + 5.2);
 
     // Cost on Right
     doc.setFont('helvetica', 'bold');
@@ -318,7 +321,7 @@ export function createFleetPDFDoc({ title = 'RELATÓRIO DE ABASTECIMENTO', sessi
     // Card Content Columns
     const yBody = yPos + 11.5;
 
-    // --- Sub-block 1: QUILOMETRAGEM ---
+    // --- Coluna 1: QUILOMETRAGEM ---
     doc.setFontSize(7);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...textMuted);
@@ -328,13 +331,13 @@ export function createFleetPDFDoc({ title = 'RELATÓRIO DE ABASTECIMENTO', sessi
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...textDark);
     if (!isOdometerWorking) {
-      doc.text('Anterior: -', margin + 4, yBody + 5);
-      doc.text('Atual: -', margin + 4, yBody + 9.5);
-      doc.text('Rodados: -', margin + 4, yBody + 14);
+      doc.text('Anterior: —', margin + 4, yBody + 5);
+      doc.text('Atual: —', margin + 4, yBody + 9.5);
+      doc.text('Rodados: —', margin + 4, yBody + 14);
     } else if (!hasPreviousKm) {
-      doc.text('Anterior: - (Primeiro)', margin + 4, yBody + 5);
+      doc.text('Anterior: — (Primeiro)', margin + 4, yBody + 5);
       doc.text(`Atual: ${formatKm(r.km_current)}`, margin + 4, yBody + 9.5);
-      doc.text('Rodados: -', margin + 4, yBody + 14);
+      doc.text('Rodados: —', margin + 4, yBody + 14);
     } else {
       doc.text(`Anterior: ${formatKm(r.km_previous)}`, margin + 4, yBody + 5);
       doc.text(`Atual: ${formatKm(r.km_current)}`, margin + 4, yBody + 9.5);
@@ -343,7 +346,7 @@ export function createFleetPDFDoc({ title = 'RELATÓRIO DE ABASTECIMENTO', sessi
       doc.text(`Rodados: ${formatKm(r.km_driven)}`, margin + 4, yBody + 14);
     }
 
-    // --- Sub-block 2: ABASTECIMENTO ---
+    // --- Coluna 2: ABASTECIMENTO ---
     const xCol2 = margin + 65;
     doc.setFontSize(7);
     doc.setFont('helvetica', 'bold');
@@ -354,12 +357,12 @@ export function createFleetPDFDoc({ title = 'RELATÓRIO DE ABASTECIMENTO', sessi
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...textDark);
     doc.text(`Litros: ${formatLiters(r.liters)}`, xCol2, yBody + 5);
-    doc.text(`Valor/L: R$ ${Number(r.price_per_liter || 0).toFixed(2)}`, xCol2, yBody + 9.5);
+    doc.text(`Preço/L: ${formatCurrency(r.price_per_liter)}`, xCol2, yBody + 9.5);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...emeraldBrand);
     doc.text(`Total: ${formatCurrency(r.total_cost)}`, xCol2, yBody + 14);
 
-    // --- Sub-block 3: DESEMPENHO ---
+    // --- Coluna 3: DESEMPENHO ---
     const xCol3 = margin + 120;
     doc.setFontSize(7);
     doc.setFont('helvetica', 'bold');
@@ -370,29 +373,30 @@ export function createFleetPDFDoc({ title = 'RELATÓRIO DE ABASTECIMENTO', sessi
       doc.setFontSize(7.5);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...amberWarning);
-      doc.text('Consumo nao calculado', xCol3, yBody + 5.5);
-      doc.setFontSize(7);
+      doc.text('Consumo não calculado', xCol3, yBody + 5.5);
+      doc.setFontSize(6.8);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(...textMuted);
-      doc.text('Odometro deste veiculo esta marcado como nao funcional.', xCol3, yBody + 10);
+      doc.text('Odômetro marcado como não funcional.', xCol3, yBody + 10);
     } else if (!hasPreviousKm) {
       doc.setFontSize(7.5);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...blueBrand);
-      doc.text('Consumo ainda nao disponivel', xCol3, yBody + 5.5);
-      doc.setFontSize(7);
+      doc.text('Consumo ainda não disponível', xCol3, yBody + 5.5);
+      doc.setFontSize(6.8);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(...textMuted);
-      doc.text('Necessario abastecimento anterior para calcular a media.', xCol3, yBody + 10);
+      doc.text('É necessário um abastecimento anterior para calcular a média.', xCol3, yBody + 10);
     } else {
       doc.setFontSize(7.5);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...emeraldBrand);
-      doc.text(`Consumo medio: ${formatConsumption(r.consumption_kml)}`, xCol3, yBody + 5);
+      doc.text(`Consumo médio: ${formatConsumption(r.consumption_kml)}`, xCol3, yBody + 5);
 
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(...textDark);
-      doc.text(`Custo/km: ${r.cost_per_km ? `R$ ${Number(r.cost_per_km).toFixed(2)}/km` : '-'}`, xCol3, yBody + 9.5);
+      const costPerKmText = r.cost_per_km ? `R$ ${Number(r.cost_per_km).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/km` : '—';
+      doc.text(`Custo/km: ${costPerKmText}`, xCol3, yBody + 9.5);
 
       if (r.driver_name) {
         doc.setFontSize(7);
@@ -405,10 +409,9 @@ export function createFleetPDFDoc({ title = 'RELATÓRIO DE ABASTECIMENTO', sessi
   });
 
   // ==============================================================================
-  // 6. FOOTER NUMBERS ON ALL PAGES
+  // 5. FOOTER NUMBERS ON ALL PAGES (Requirement 21)
   // ==============================================================================
   const totalPages = doc.internal.getNumberOfPages();
-  const generationTime = new Date().toLocaleDateString('pt-BR') + ' as ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
@@ -418,15 +421,15 @@ export function createFleetPDFDoc({ title = 'RELATÓRIO DE ABASTECIMENTO', sessi
     doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(148, 163, 184);
-    doc.text(`Gerenciamento de Frota • Relatorio gerado em ${generationTime}`, margin, pageHeight - 6.5);
-    doc.text(`Pagina ${i} de ${totalPages}`, pageWidth - margin, pageHeight - 6.5, { align: 'right' });
+    doc.text(`Gerenciamento de Frota • Relatório gerado em: ${generationFullStr}`, margin, pageHeight - 6.5);
+    doc.text(`Página ${i} de ${totalPages}`, pageWidth - margin, pageHeight - 6.5, { align: 'right' });
   }
 
   return doc;
 }
 
 // ==============================================================================
-// Output Dispatchers (Download, View in New Tab/Safari, Web Share)
+// Output Dispatchers (Download, View in New Tab, Web Share)
 // ==============================================================================
 export function downloadPDF(doc, filename) {
   doc.save(filename);
@@ -463,16 +466,18 @@ export async function sharePDF(doc, filename, title = 'Relatório de Abastecimen
 }
 
 // ==============================================================================
-// High-Level Session & Fleet PDF Generation Functions
+// High-Level Session, Fleet & Individual PDF Generation Functions
 // ==============================================================================
 export function generateSessionPDF(session, records = [], summary = {}, action = 'download') {
   const dateFormatted = session.date ? session.date.replace(/-/g, '_') : new Date().toISOString().split('T')[0];
-  const filename = `Gerenciamento_Frota_Abastecimento_${session.code || dateFormatted}.pdf`;
+  const filename = `Gerenciamento_Frota_Relatorio_Semanal_${session.code || dateFormatted}.pdf`;
 
   const doc = createFleetPDFDoc({
-    title: 'RELATORIO DE ABASTECIMENTO',
+    reportType: 'semanal',
+    title: 'RELATÓRIO SEMANAL DE ABASTECIMENTO',
     sessionCode: session.code,
     dateStr: session.date,
+    periodStr: formatDateBR(session.date),
     records,
     summary: {
       total_vehicles: summary.total_vehicles || records.length,
@@ -494,19 +499,37 @@ export function generateSessionPDF(session, records = [], summary = {}, action =
 
 export function generateFleetReportPDF({ filters = {}, records = [], summary = {} }, action = 'download') {
   const todayStr = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
-  const filename = `Gerenciamento_Frota_Relatorio_${todayStr}.pdf`;
+  
+  // Distinguish Report Types
+  let reportTitle = 'RELATÓRIO CONSOLIDADO DE ABASTECIMENTO';
+  let reportType = 'consolidado';
+  let filePrefix = 'Relatorio_Consolidado';
+
+  if (filters.is_weekly || (filters.period && filters.period.includes('week'))) {
+    reportTitle = 'RELATÓRIO SEMANAL DE ABASTECIMENTO';
+    reportType = 'semanal';
+    filePrefix = 'Relatorio_Semanal';
+  } else if (filters.vehicle_id || filters.vehicle_name) {
+    reportTitle = `RELATÓRIO INDIVIDUAL DE ABASTECIMENTO — ${filters.vehicle_name || 'VEÍCULO'}`;
+    reportType = 'individual';
+    filePrefix = 'Relatorio_Individual';
+  }
+
+  const filename = `Gerenciamento_Frota_${filePrefix}_${todayStr}.pdf`;
 
   const filterSubtitleParts = [];
-  if (filters.start_date || filters.end_date) {
-    filterSubtitleParts.push(`Periodo: ${formatDateBR(filters.start_date)} a ${formatDateBR(filters.end_date)}`);
+  if (filters.start_date && filters.end_date) {
+    filterSubtitleParts.push(`${formatDateBR(filters.start_date)} a ${formatDateBR(filters.end_date)}`);
   }
   if (filters.fuel_type) {
-    filterSubtitleParts.push(`Combustivel: ${filters.fuel_type}`);
+    filterSubtitleParts.push(`Combustível: ${filters.fuel_type}`);
   }
 
   const doc = createFleetPDFDoc({
-    title: `RELATORIO DE GESTAO DE FROTA${filterSubtitleParts.length ? ` (${filterSubtitleParts.join(' • ')})` : ''}`,
-    sessionCode: 'RELATORIO-CONSOLIDADO',
+    reportType,
+    title: reportTitle,
+    sessionCode: null,
+    periodStr: filterSubtitleParts.length ? filterSubtitleParts.join(' • ') : formatDateBR(new Date().toISOString().split('T')[0]),
     dateStr: new Date().toISOString().split('T')[0],
     records,
     summary: {
@@ -520,7 +543,7 @@ export function generateFleetReportPDF({ filters = {}, records = [], summary = {
   if (action === 'view') {
     openPDFInViewer(doc, filename);
   } else if (action === 'share') {
-    return sharePDF(doc, filename, 'Relatório Consolidado da Frota');
+    return sharePDF(doc, filename, `${reportTitle} - Gerenciamento de Frota`);
   } else {
     downloadPDF(doc, filename);
   }

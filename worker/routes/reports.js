@@ -2,9 +2,49 @@
 import { query, get } from '../utils/db.js';
 import * as XLSX from 'xlsx';
 
+function getMondayAndSunday(dateStr) {
+  let targetDate;
+  if (dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    targetDate = new Date(y, m - 1, d, 12, 0, 0);
+  } else {
+    targetDate = new Date();
+  }
+  
+  const day = targetDate.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  
+  const monday = new Date(targetDate);
+  monday.setDate(targetDate.getDate() + diffToMonday);
+  
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  
+  const formatYMD = (d) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const dateNum = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${dateNum}`;
+  };
+
+  return {
+    startDate: formatYMD(monday),
+    endDate: formatYMD(sunday)
+  };
+}
+
 export async function getDashboardStats(request, env) {
   try {
-    // 1. Vehicle counts by status
+    const url = new URL(request.url);
+    const start_date = url.searchParams.get('start_date');
+    const end_date = url.searchParams.get('end_date');
+    const date = url.searchParams.get('date');
+
+    const defaultWeek = getMondayAndSunday(date);
+    const effectiveStartDate = start_date || defaultWeek.startDate;
+    const effectiveEndDate = end_date || defaultWeek.endDate;
+
+    // 1. Vehicle counts by status (Fleet Overview)
     const vehicles = await query(env.DB, 'SELECT id, name, model, plate, status, odometer_working FROM vehicles');
     const totalVehicles = vehicles.length;
     const workingVehicles = vehicles.filter(v => v.status === 'working').length;
@@ -12,131 +52,121 @@ export async function getDashboardStats(request, env) {
     const maintenanceVehicles = vehicles.filter(v => v.status === 'maintenance').length;
     const inactiveVehicles = vehicles.filter(v => v.status === 'inactive').length;
 
-    // 2. Current active or latest session (week)
-    const activeSession = (await get(env.DB, "SELECT * FROM fueling_sessions WHERE status IN ('in_progress', 'draft') ORDER BY id DESC LIMIT 1"))
-      || (await get(env.DB, "SELECT * FROM fueling_sessions WHERE status = 'completed' ORDER BY id DESC LIMIT 1"));
-
-    let fueledCount = 0;
-    let pendingCount = 0;
-    let totalSpentWeek = 0;
-    let totalLitersWeek = 0;
-    let recordsThisWeek = [];
-
-    if (activeSession) {
-      recordsThisWeek = await query(
-        env.DB,
-        `SELECT fr.*, v.name as vehicle_name, v.plate as vehicle_plate, v.status as vehicle_status
-         FROM fuel_records fr
-         JOIN vehicles v ON fr.vehicle_id = v.id
-         WHERE fr.session_id = ?`,
-        [activeSession.id]
-      );
-
-      const fueledVehicleIds = new Set(recordsThisWeek.map(r => r.vehicle_id));
-      const workingList = vehicles.filter(v => v.status === 'working');
-      fueledCount = workingList.filter(v => fueledVehicleIds.has(v.id)).length;
-      pendingCount = Math.max(0, workingList.length - fueledCount);
-
-      totalSpentWeek = recordsThisWeek.reduce((sum, r) => sum + (Number(r.total_cost) || 0), 0);
-      totalLitersWeek = recordsThisWeek.reduce((sum, r) => sum + (Number(r.liters) || 0), 0);
-    } else {
-      pendingCount = workingVehicles;
-    }
-
-    // 3. Fleet consumption average (ONLY for existing vehicles with odometer_working = 1 and valid km/L)
-    const fleetAvgQuery = await get(
+    // 2. Query Fuel Records STRICTLY for the Selected Week
+    const recordsThisWeek = await query(
       env.DB,
-      `SELECT 
-        AVG(fr.consumption_kml) as avg_consumption,
-        SUM(fr.km_driven) as total_km
+      `SELECT fr.*, v.name as vehicle_name, v.plate as vehicle_plate, v.status as vehicle_status,
+              fs.code as session_code, fs.date as session_date
        FROM fuel_records fr
        JOIN vehicles v ON fr.vehicle_id = v.id
-       WHERE fr.odometer_working = 1 AND fr.consumption_kml > 0 AND fr.consumption_kml < 50`
+       LEFT JOIN fueling_sessions fs ON fr.session_id = fs.id
+       WHERE (
+         (fs.date IS NOT NULL AND fs.date >= ? AND fs.date <= ?)
+         OR (fs.date IS NULL AND fr.created_at >= ? AND fr.created_at <= ?)
+       )
+       ORDER BY fr.id ASC`,
+      [effectiveStartDate, effectiveEndDate, effectiveStartDate, effectiveEndDate + ' 23:59:59']
     );
-    const fleetAvgConsumption = totalVehicles > 0 && fleetAvgQuery?.avg_consumption
-      ? Number(fleetAvgQuery.avg_consumption).toFixed(2)
+
+    const fueledVehicleIds = new Set(recordsThisWeek.map(r => r.vehicle_id));
+    const workingList = vehicles.filter(v => v.status === 'working');
+    const fueledCount = workingList.filter(v => fueledVehicleIds.has(v.id)).length;
+    const pendingCount = Math.max(0, workingList.length - fueledCount);
+
+    const totalSpentWeek = recordsThisWeek.reduce((sum, r) => sum + (Number(r.total_cost) || 0), 0);
+    const totalLitersWeek = recordsThisWeek.reduce((sum, r) => sum + (Number(r.liters) || 0), 0);
+
+    // 3. Fleet consumption average STRICTLY in the selected week
+    const validConsRecords = recordsThisWeek.filter(r => 
+      (r.odometer_working === 1 || r.odometer_working === true || r.odometer_working === '1') && 
+      Number(r.consumption_kml) > 0 && 
+      Number(r.consumption_kml) < 50
+    );
+    const fleetAvgConsumption = validConsRecords.length > 0
+      ? Number((validConsRecords.reduce((s, r) => s + Number(r.consumption_kml), 0) / validConsRecords.length).toFixed(2))
       : null;
 
-    // 4. Insights (Most economical, highest expense, most KM driven)
-    const mostEconomical = totalVehicles > 0 ? await get(
-      env.DB,
-      `SELECT v.name, v.plate, AVG(fr.consumption_kml) as avg_kml
-       FROM fuel_records fr
-       JOIN vehicles v ON fr.vehicle_id = v.id
-       WHERE fr.odometer_working = 1 AND fr.consumption_kml > 0
-       GROUP BY v.id
-       ORDER BY avg_kml DESC
-       LIMIT 1`
-    ) : null;
-
-    const highestSpender = totalVehicles > 0 ? await get(
-      env.DB,
-      `SELECT v.name, v.plate, SUM(fr.total_cost) as total_spent, SUM(fr.liters) as total_liters
-       FROM fuel_records fr
-       JOIN vehicles v ON fr.vehicle_id = v.id
-       GROUP BY v.id
-       ORDER BY total_spent DESC
-       LIMIT 1`
-    ) : null;
-
-    const mostKmDriven = totalVehicles > 0 ? await get(
-      env.DB,
-      `SELECT v.name, v.plate, SUM(fr.km_driven) as total_km
-       FROM fuel_records fr
-       JOIN vehicles v ON fr.vehicle_id = v.id
-       WHERE fr.odometer_working = 1 AND fr.km_driven > 0
-       GROUP BY v.id
-       ORDER BY total_km DESC
-       LIMIT 1`
-    ) : null;
-
-    // 5. Previous week comparison
-    const completedSessions = await query(
-      env.DB,
-      "SELECT * FROM fueling_sessions WHERE status = 'completed' ORDER BY id DESC LIMIT 2"
-    );
-    let prevWeekDiff = {
-      costDiffPct: 0,
-      litersDiffPct: 0,
-      prevCost: 0,
-      prevLiters: 0
-    };
-
-    if (totalVehicles > 0 && completedSessions.length >= 2) {
-      const currentS = completedSessions[0];
-      const prevS = completedSessions[1];
-      if (prevS.total_cost > 0) {
-        prevWeekDiff.costDiffPct = Number((((currentS.total_cost - prevS.total_cost) / prevS.total_cost) * 100).toFixed(1));
-        prevWeekDiff.prevCost = prevS.total_cost;
-      }
-      if (prevS.total_liters > 0) {
-        prevWeekDiff.litersDiffPct = Number((((currentS.total_liters - prevS.total_liters) / prevS.total_liters) * 100).toFixed(1));
-        prevWeekDiff.prevLiters = prevS.total_liters;
-      }
+    // 4. Insights (Strictly in the selected week)
+    // Most economical vehicle in week
+    let mostEconomical = null;
+    const ecoMap = {};
+    validConsRecords.forEach(r => {
+      if (!ecoMap[r.vehicle_id]) ecoMap[r.vehicle_id] = { name: r.vehicle_name, plate: r.vehicle_plate, sumKml: 0, count: 0 };
+      ecoMap[r.vehicle_id].sumKml += Number(r.consumption_kml);
+      ecoMap[r.vehicle_id].count += 1;
+    });
+    const ecoList = Object.values(ecoMap).map(e => ({ name: e.name, plate: e.plate, kml: (e.sumKml / e.count).toFixed(2) }));
+    if (ecoList.length > 0) {
+      ecoList.sort((a, b) => Number(b.kml) - Number(a.kml));
+      mostEconomical = ecoList[0];
     }
 
-    // 6. Fuel Type Distribution for Charts
-    const fuelDistribution = totalVehicles > 0 ? await query(
-      env.DB,
-      `SELECT 
-        CASE 
-          WHEN UPPER(fr.fuel_type) LIKE '%DIESEL%' THEN 'Diesel'
-          WHEN UPPER(fr.fuel_type) LIKE '%GASOLINA%' THEN 'Gasolina'
-          WHEN UPPER(fr.fuel_type) LIKE '%ETANOL%' OR UPPER(fr.fuel_type) LIKE '%ALCOOL%' THEN 'Etanol'
-          ELSE 'Outro'
-        END as fuel_group,
-        SUM(fr.liters) as total_liters,
-        SUM(fr.total_cost) as total_cost
-       FROM fuel_records fr
-       JOIN vehicles v ON fr.vehicle_id = v.id
-       GROUP BY fuel_group`
-    ) : [];
+    // Highest spender vehicle in week
+    let highestSpender = null;
+    const spenderMap = {};
+    recordsThisWeek.forEach(r => {
+      if (!spenderMap[r.vehicle_id]) spenderMap[r.vehicle_id] = { name: r.vehicle_name, plate: r.vehicle_plate, total_spent: 0, total_liters: 0 };
+      spenderMap[r.vehicle_id].total_spent += Number(r.total_cost || 0);
+      spenderMap[r.vehicle_id].total_liters += Number(r.liters || 0);
+    });
+    const spenderList = Object.values(spenderMap);
+    if (spenderList.length > 0) {
+      spenderList.sort((a, b) => b.total_spent - a.total_spent);
+      highestSpender = {
+        name: spenderList[0].name,
+        plate: spenderList[0].plate,
+        total_spent: spenderList[0].total_spent.toFixed(2),
+        total_liters: spenderList[0].total_liters.toFixed(2)
+      };
+    }
 
-    // 7. Recent Fueling Sessions (last 6)
+    // Most KM driven vehicle in week
+    let mostKmDriven = null;
+    const kmMap = {};
+    recordsThisWeek.forEach(r => {
+      if ((r.odometer_working === 1 || r.odometer_working === true || r.odometer_working === '1') && Number(r.km_driven) > 0) {
+        if (!kmMap[r.vehicle_id]) kmMap[r.vehicle_id] = { name: r.vehicle_name, plate: r.vehicle_plate, total_km: 0 };
+        kmMap[r.vehicle_id].total_km += Number(r.km_driven);
+      }
+    });
+    const kmList = Object.values(kmMap);
+    if (kmList.length > 0) {
+      kmList.sort((a, b) => b.total_km - a.total_km);
+      mostKmDriven = {
+        name: kmList[0].name,
+        plate: kmList[0].plate,
+        total_km: kmList[0].total_km.toFixed(0)
+      };
+    }
+
+    // 5. Fuel Type Distribution STRICTLY for this week
+    const fuelMap = {};
+    recordsThisWeek.forEach(r => {
+      let group = 'Outro';
+      const fUpper = (r.fuel_type || '').toUpperCase();
+      if (fUpper.includes('DIESEL')) group = 'Diesel';
+      else if (fUpper.includes('GASOLINA')) group = 'Gasolina';
+      else if (fUpper.includes('ETANOL') || fUpper.includes('ALCOOL')) group = 'Etanol';
+      else if (fUpper.includes('GNV')) group = 'GNV';
+
+      if (!fuelMap[group]) fuelMap[group] = { fuel_group: group, total_liters: 0, total_cost: 0 };
+      fuelMap[group].total_liters += Number(r.liters || 0);
+      fuelMap[group].total_cost += Number(r.total_cost || 0);
+    });
+    const fuelDistribution = Object.values(fuelMap).map(f => ({
+      fuel_group: f.fuel_group,
+      total_liters: Number(f.total_liters.toFixed(2)),
+      total_cost: Number(f.total_cost.toFixed(2))
+    }));
+
+    // 6. Recent Fueling Sessions (last 6)
     const recentSessions = await query(
       env.DB,
       "SELECT id, code, date, total_vehicles, total_liters, total_cost, status FROM fueling_sessions ORDER BY id DESC LIMIT 6"
     );
+
+    // 7. Active session if any
+    const activeSession = (await get(env.DB, "SELECT * FROM fueling_sessions WHERE status IN ('in_progress', 'draft') ORDER BY id DESC LIMIT 1"));
 
     // 8. Alerts
     const alerts = [];
@@ -174,6 +204,11 @@ export async function getDashboardStats(request, env) {
     });
 
     return Response.json({
+      week_info: {
+        start_date: effectiveStartDate,
+        end_date: effectiveEndDate,
+        total_records: recordsThisWeek.length
+      },
       totals: {
         total_vehicles: totalVehicles,
         working_vehicles: workingVehicles,
@@ -187,29 +222,11 @@ export async function getDashboardStats(request, env) {
         fleet_avg_consumption_kml: fleetAvgConsumption
       },
       insights: {
-        most_economical: mostEconomical ? {
-          name: mostEconomical.name,
-          plate: mostEconomical.plate,
-          kml: Number(mostEconomical.avg_kml).toFixed(2)
-        } : null,
-        highest_spender: highestSpender ? {
-          name: highestSpender.name,
-          plate: highestSpender.plate,
-          total_spent: Number(highestSpender.total_spent).toFixed(2),
-          total_liters: Number(highestSpender.total_liters).toFixed(2)
-        } : null,
-        most_km: mostKmDriven ? {
-          name: mostKmDriven.name,
-          plate: mostKmDriven.plate,
-          total_km: Number(mostKmDriven.total_km).toFixed(0)
-        } : null,
-        prev_week_diff: prevWeekDiff
+        most_economical: mostEconomical,
+        highest_spender: highestSpender,
+        most_km: mostKmDriven
       },
-      fuel_distribution: fuelDistribution.map(f => ({
-        ...f,
-        total_liters: Number(Number(f.total_liters).toFixed(2)),
-        total_cost: Number(Number(f.total_cost).toFixed(2))
-      })),
+      fuel_distribution: fuelDistribution,
       recent_sessions: recentSessions,
       alerts,
       active_session: activeSession

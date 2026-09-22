@@ -37,7 +37,7 @@ export default function Reports() {
   const [pdfError, setPdfError] = useState(null);
 
   // Quick Period & Custom Filters
-  const [activePeriod, setActivePeriod] = useState('this_month');
+  const [activePeriod, setActivePeriod] = useState('this_week');
   const [selectedVehicle, setSelectedVehicle] = useState('');
   const [selectedFuel, setSelectedFuel] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -48,35 +48,54 @@ export default function Reports() {
 
   const getQuickPeriodDates = (periodKey) => {
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
+    const day = now.getDay();
+    const diffToMonday = day === 0 ? -6 : 1 - day;
+
+    const formatYMD = (dt) => {
+      const y = dt.getFullYear();
+      const m = String(dt.getMonth() + 1).padStart(2, '0');
+      const dayStr = String(dt.getDate()).padStart(2, '0');
+      return `${y}-${m}-${dayStr}`;
+    };
 
     if (periodKey === 'this_week') {
-      const day = now.getDay();
-      const diffToMonday = day === 0 ? -6 : 1 - day;
       const monday = new Date(now);
       monday.setDate(now.getDate() + diffToMonday);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
       return {
-        start: monday.toISOString().split('T')[0],
-        end: todayStr
+        start: formatYMD(monday),
+        end: formatYMD(sunday)
+      };
+    } else if (periodKey === 'last_week') {
+      const monday = new Date(now);
+      monday.setDate(now.getDate() + diffToMonday - 7);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      return {
+        start: formatYMD(monday),
+        end: formatYMD(sunday)
       };
     } else if (periodKey === 'this_month') {
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
       return {
-        start: firstDay.toISOString().split('T')[0],
-        end: todayStr
+        start: formatYMD(firstDay),
+        end: formatYMD(lastDay)
       };
     } else if (periodKey === 'last_30_days') {
       const d = new Date(now);
       d.setDate(now.getDate() - 30);
       return {
-        start: d.toISOString().split('T')[0],
-        end: todayStr
+        start: formatYMD(d),
+        end: formatYMD(now)
       };
     } else if (periodKey === 'this_year') {
       const firstDay = new Date(now.getFullYear(), 0, 1);
+      const lastDay = new Date(now.getFullYear(), 11, 31);
       return {
-        start: firstDay.toISOString().split('T')[0],
-        end: todayStr
+        start: formatYMD(firstDay),
+        end: formatYMD(lastDay)
       };
     }
     return { start: '', end: '' };
@@ -114,9 +133,9 @@ export default function Reports() {
     }
   };
 
-  // Initialize with 'this_month' on mount
+  // Initialize with 'this_week' on mount
   useEffect(() => {
-    const { start, end } = getQuickPeriodDates('this_month');
+    const { start, end } = getQuickPeriodDates('this_week');
     setStartDate(start);
     setEndDate(end);
   }, []);
@@ -128,8 +147,17 @@ export default function Reports() {
   const handleClearFilters = () => {
     setSelectedVehicle('');
     setSelectedFuel('');
-    handlePeriodSelect('this_month');
+    handlePeriodSelect('this_week');
   };
+
+  // Determine report category for button & title
+  const isWeeklyScope = activePeriod === 'this_week' || activePeriod === 'last_week';
+  const isIndividualScope = !!selectedVehicle;
+  const reportActionLabel = isIndividualScope
+    ? 'Gerar Relatório Individual (PDF)'
+    : isWeeklyScope
+    ? 'Gerar Relatório Semanal (PDF)'
+    : 'Gerar Relatório Consolidado (PDF)';
 
   // PDF Export Engine (Primary Action)
   const handleGeneratePDF = async (action = 'download') => {
@@ -139,6 +167,8 @@ export default function Reports() {
     try {
       const vehicleObj = vehicles.find((v) => String(v.id) === String(selectedVehicle));
       const filtersObj = {
+        is_weekly: isWeeklyScope,
+        vehicle_id: selectedVehicle || undefined,
         vehicle_name: vehicleObj ? vehicleObj.name : undefined,
         fuel_type: selectedFuel || undefined,
         start_date: startDate || undefined,
@@ -183,14 +213,14 @@ export default function Reports() {
   return (
     <div className="space-y-5 max-w-7xl mx-auto">
       
-      {/* 1. Header (Requirements 5, 6, 7) */}
+      {/* 1. Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 pb-1 border-b border-slate-800/80">
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
             RELATÓRIOS
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-            Consumo, abastecimentos e custos da frota
+            Relatórios semanais, consolidados e individuais da frota
           </p>
         </div>
 
@@ -209,7 +239,7 @@ export default function Reports() {
             ) : (
               <>
                 <FileText className="w-4 h-4 text-emerald-100" />
-                <span>Gerar PDF</span>
+                <span>{reportActionLabel}</span>
               </>
             )}
           </button>
@@ -217,7 +247,7 @@ export default function Reports() {
           <button
             onClick={exportExcel}
             disabled={loading || records.length === 0}
-            title="Exportar dados em planilha Excel (Opção Secundária)"
+            title="Exportar dados em planilha Excel"
             className="w-full sm:w-auto min-h-[44px] py-2.5 px-3.5 rounded-xl bg-slate-800/80 hover:bg-slate-750 active:scale-[0.98] disabled:opacity-40 text-slate-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-1.5 border border-slate-700/60 transition-all cursor-pointer"
           >
             <FileSpreadsheet className="w-3.5 h-3.5 text-slate-400" />
@@ -265,11 +295,12 @@ export default function Reports() {
         </div>
       )}
 
-      {/* 2. Quick Periods Shortcuts (Requirement 22) */}
+      {/* 2. Quick Periods Shortcuts */}
       <div className="flex flex-wrap items-center gap-1.5 bg-slate-900/60 p-2 rounded-2xl border border-slate-800">
         <span className="text-[11px] uppercase tracking-wider text-slate-400 font-bold px-2">Período:</span>
         {[
           { id: 'this_week', label: 'Esta semana' },
+          { id: 'last_week', label: 'Semana anterior' },
           { id: 'this_month', label: 'Este mês' },
           { id: 'last_30_days', label: 'Últimos 30 dias' },
           { id: 'this_year', label: 'Este ano' },
