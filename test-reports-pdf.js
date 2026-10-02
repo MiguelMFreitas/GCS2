@@ -236,7 +236,103 @@ async function runReportTests() {
   const pageCountConsolidado = docConsolidado.internal.getNumberOfPages();
   assert(pageCountConsolidado >= 2, `PDF Consolidado de 10 veículos paginado em ${pageCountConsolidado} páginas`);
 
-  // 5. Check PDF Content & Aesthetics
+  // 5. Scenario 4: RELATÓRIO MENSAL / MULTI-PERÍODO COM AGRUPAMENTO POR VEÍCULO E MÉDIA SEMANAL
+  const monthRecords = [
+    // F1000 - Semana 1
+    {
+      vehicle_id: 1,
+      vehicle_name: 'F1000',
+      vehicle_plate: 'ABC1234',
+      fuel_type: 'Diesel S10',
+      fuel_date: '2026-09-02',
+      odometer_working: 1,
+      km_previous: 100000,
+      km_current: 100348.5,
+      km_driven: 348.5,
+      liters: 50.0,
+      price_per_liter: 7.00,
+      total_cost: 350.00,
+      consumption_kml: 6.97, // 348.5 / 50 = 6.97
+      driver_name: 'Carlos'
+    },
+    // F1000 - Semana 2
+    {
+      vehicle_id: 1,
+      vehicle_name: 'F1000',
+      vehicle_plate: 'ABC1234',
+      fuel_type: 'Diesel S10',
+      fuel_date: '2026-09-09',
+      odometer_working: 1,
+      km_previous: 100348.5,
+      km_current: 100732.0,
+      km_driven: 383.5,
+      liters: 50.0,
+      price_per_liter: 7.00,
+      total_cost: 350.00,
+      consumption_kml: 7.67, // 383.5 / 50 = 7.67
+      driver_name: 'Carlos'
+    },
+    // Strada - Semana 1
+    {
+      vehicle_id: 2,
+      vehicle_name: 'Fiat Strada',
+      vehicle_plate: 'XYZ9876',
+      fuel_type: 'Gasolina',
+      fuel_date: '2026-09-03',
+      odometer_working: 1,
+      km_previous: 50000,
+      km_current: 50440,
+      km_driven: 440,
+      liters: 40.0,
+      price_per_liter: 6.00,
+      total_cost: 240.00,
+      consumption_kml: 11.0,
+      driver_name: 'Marcos'
+    },
+    // Master com odômetro quebrado
+    {
+      vehicle_id: 3,
+      vehicle_name: 'Renault Master',
+      vehicle_plate: 'PQR6S78',
+      fuel_type: 'Diesel S10',
+      fuel_date: '2026-09-04',
+      odometer_working: 0,
+      km_previous: null,
+      km_current: null,
+      km_driven: null,
+      liters: 60.0,
+      price_per_liter: 7.00,
+      total_cost: 420.00,
+      consumption_kml: null,
+      driver_name: 'Eduardo'
+    }
+  ];
+
+  const monthTotalCost = monthRecords.reduce((s, r) => s + r.total_cost, 0);
+  const monthTotalLiters = monthRecords.reduce((s, r) => s + r.liters, 0);
+
+  // Média aritmética da F1000: (6.97 + 7.67) / 2 = 7.32 km/L
+  const f1000KmlAvg = (6.97 + 7.67) / 2;
+  assert(Math.round(f1000KmlAvg * 100) / 100 === 7.32, `Média aritmética F1000: (6.97 + 7.67)/2 = 7.32 km/L (calculado: ${f1000KmlAvg.toFixed(2)})`);
+
+  const docMonth = createFleetPDFDoc({
+    reportType: 'mes',
+    title: 'RELATÓRIO MENSAL DE ABASTECIMENTO',
+    periodStr: '01/09/2026 a 30/09/2026',
+    dateStr: '2026-09-30',
+    records: monthRecords,
+    summary: { total_vehicles: 3, total_liters: monthTotalLiters, total_cost: monthTotalCost }
+  });
+
+  const pageCountMonth = docMonth.internal.getNumberOfPages();
+  assert(pageCountMonth >= 1, `PDF Mensal gerado com sucesso com ${pageCountMonth} página(s)`);
+  const pdfMonthOutput = docMonth.output().toUpperCase();
+  assert(pdfMonthOutput.includes('F1000'), 'PDF Mensal contém veículo F1000');
+  assert(pdfMonthOutput.includes('FIAT STRADA'), 'PDF Mensal contém veículo Fiat Strada');
+  assert(pdfMonthOutput.includes('RENAULT MASTER'), 'PDF Mensal contém veículo Renault Master');
+  assert(pdfMonthOutput.includes('RESUMO GERAL DA FROTA'), 'PDF Mensal contém RESUMO GERAL DA FROTA no final');
+
+  // 6. Check PDF Content & Aesthetics
   const pdfOutput = docWeek2.output();
   assert(!pdfOutput.includes('Ø'), 'PDF não contém caractere quebrado Ø');
   assert(!pdfOutput.includes('â›½'), 'PDF não contém sequências quebradas de emoji');

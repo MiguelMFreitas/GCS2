@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   Calendar,
   Share2,
+  Eye,
   Image as ImageIcon
 } from 'lucide-react';
 import { sessionService } from '../services/api';

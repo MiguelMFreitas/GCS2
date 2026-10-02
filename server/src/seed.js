@@ -22,15 +22,20 @@ export async function seedDatabase() {
     throw new Error('A variável de ambiente INITIAL_ADMIN_PASSWORD é obrigatória para executar o seed.');
   }
   const hashGerente = bcrypt.hashSync(initialAdminPassword, salt);
+  const hashEnc = bcrypt.hashSync('123456', salt);
   const hashOp = bcrypt.hashSync('123456', salt);
 
   run(
     'INSERT INTO users (username, name, email, password_hash, role, active) VALUES (?, ?, ?, ?, ?, 1)',
-    ['gerente', 'Gerente', 'gerente@gcs.com.br', hashGerente, 'admin']
+    ['gerente', 'Gerente', 'gerente@gcs.com.br', hashGerente, 'gerente']
   );
   run(
     'INSERT INTO users (username, name, email, password_hash, role, active) VALUES (?, ?, ?, ?, ?, 1)',
-    ['operador', 'Operador de Pista', 'operador@gcs.com.br', hashOp, 'operator']
+    ['encarregado', 'Encarregado Operacional', 'encarregado@gcs.com.br', hashEnc, 'encarregado']
+  );
+  run(
+    'INSERT INTO users (username, name, email, password_hash, role, active) VALUES (?, ?, ?, ?, ?, 1)',
+    ['operador', 'Operador de Pista', 'operador@gcs.com.br', hashOp, 'funcionario']
   );
 
   // 2. Vehicles

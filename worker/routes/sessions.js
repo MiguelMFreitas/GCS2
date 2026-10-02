@@ -530,3 +530,404 @@ function normalizeFuelCategory(fuelType) {
   if (upper.includes('GNV')) return 'GNV';
   return fuelType || 'Outro';
 }
+
+function getMondayAndSunday(dateStr) {
+  let targetDate;
+  if (dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    targetDate = new Date(y, m - 1, d, 12, 0, 0);
+  } else {
+    targetDate = new Date();
+  }
+  const day = targetDate.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const monday = new Date(targetDate);
+  monday.setDate(targetDate.getDate() + diffToMonday);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+
+  const formatYMD = (d) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const dateNum = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${dateNum}`;
+  };
+
+  return {
+    startDate: formatYMD(monday),
+    endDate: formatYMD(sunday)
+  };
+}
+
+export async function getPendingVehiclesForEmployee(request, env) {
+  try {
+    const { startDate, endDate } = getMondayAndSunday();
+
+    const fueledThisWeek = await query(
+      env.DB,
+      `SELECT DISTINCT fr.vehicle_id
+       FROM fuel_records fr
+       LEFT JOIN fueling_sessions fs ON fr.session_id = fs.id
+       WHERE (
+         (date(fr.created_at) >= ? AND date(fr.created_at) <= ?)
+         OR (fs.date IS NOT NULL AND fs.date >= ? AND fs.date <= ?)
+       )`,
+      [startDate, endDate, startDate, endDate]
+    );
+
+    const fueledVehicleIds = new Set(fueledThisWeek.map(r => r.vehicle_id));
+
+    const activeVehicles = await query(
+      env.DB,
+      "SELECT id, name, brand, model, version, plate, fuel_type_default, photo_url, odometer_working FROM vehicles WHERE status = 'working' ORDER BY name ASC"
+    );
+
+    const pendingVehicles = activeVehicles.filter(v => !fueledVehicleIds.has(v.id));
+
+    const sanitized = pendingVehicles.map(v => ({
+      id: v.id,
+      name: v.name,
+      brand: v.brand,
+      model: v.model,
+      version: v.version,
+      plate: v.plate,
+      fuel_type_default: v.fuel_type_default || 'Diesel S10',
+      photo_url: v.photo_url || null,
+      odometer_working: v.odometer_working !== 0 && v.odometer_working !== false ? 1 : 0
+    }));
+
+    return Response.json({
+      week: { startDate, endDate },
+      total_pending: sanitized.length,
+      vehicles: sanitized
+    });
+  } catch (err) {
+    console.error('Erro ao listar veículos pendentes Worker:', err);
+    return Response.json({ error: 'Erro ao listar veículos pendentes de abastecimento.' }, { status: 500 });
+  }
+}
+
+export async function submitEmployeeFueling(request, env, user) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const {
+      vehicle_id,
+      km_current,
+      liters,
+      price_per_liter,
+      total_cost,
+      photo_dashboard_url,
+      photo_pump_url,
+      fuel_type,
+      notes
+    } = body;
+
+    if (!vehicle_id) {
+      return Response.json({ error: 'Veículo é obrigatório.' }, { status: 400 });
+    }
+
+    const vehicle = await get(env.DB, 'SELECT * FROM vehicles WHERE id = ?', [vehicle_id]);
+    if (!vehicle) {
+      return Response.json({ error: 'Veículo não encontrado.' }, { status: 404 });
+    }
+
+    if (vehicle.status !== 'working') {
+      return Response.json({ error: 'Este veículo não está ativo para abastecimento.' }, { status: 400 });
+    }
+
+    const { startDate, endDate } = getMondayAndSunday();
+    const existingThisWeek = await get(
+      env.DB,
+      `SELECT fr.id FROM fuel_records fr
+       LEFT JOIN fueling_sessions fs ON fr.session_id = fs.id
+       WHERE fr.vehicle_id = ? AND (
+         (date(fr.created_at) >= ? AND date(fr.created_at) <= ?)
+         OR (fs.date IS NOT NULL AND fs.date >= ? AND fs.date <= ?)
+       )`,
+      [vehicle_id, startDate, endDate, startDate, endDate]
+    );
+
+    if (existingThisWeek) {
+      return Response.json({ error: 'Este veículo já possui abastecimento registrado nesta semana.' }, { status: 400 });
+    }
+
+    const parseNumeric = (val) => {
+      if (val === null || val === undefined || val === '') return NaN;
+      if (typeof val === 'number') return val;
+      const str = String(val).replace(/[R$\sLkm]/g, '').replace(',', '.');
+      return parseFloat(str);
+    };
+
+    const numLiters = parseNumeric(liters);
+    const numPrice = parseNumeric(price_per_liter);
+    const numCost = parseNumeric(total_cost);
+
+    const pumpPhoto = photo_pump_url || body.pump_photo_url;
+    const dashPhoto = photo_dashboard_url || body.dashboard_photo_url;
+
+    if (isNaN(numLiters) || numLiters <= 0) {
+      return Response.json({ error: 'A quantidade de litros deve ser maior que zero.' }, { status: 400 });
+    }
+    if (isNaN(numPrice) || numPrice <= 0) {
+      return Response.json({ error: 'O valor por litro deve ser maior que zero.' }, { status: 400 });
+    }
+    if (isNaN(numCost) || numCost <= 0) {
+      return Response.json({ error: 'O valor total deve ser maior que zero.' }, { status: 400 });
+    }
+    if (!pumpPhoto) {
+      return Response.json({ error: 'A foto da bomba é obrigatória.' }, { status: 400 });
+    }
+
+    const isOdoWorking = vehicle.odometer_working !== 0 && vehicle.odometer_working !== false ? 1 : 0;
+    let numKmCurrent = null;
+
+    if (isOdoWorking === 1) {
+      const rawKm = km_current !== undefined && km_current !== null ? km_current : body.current_km;
+      numKmCurrent = parseNumeric(rawKm);
+      if (isNaN(numKmCurrent) || numKmCurrent <= 0) {
+        return Response.json({ error: 'A quilometragem atual é obrigatória para este veículo.' }, { status: 400 });
+      }
+      if (!dashPhoto) {
+        return Response.json({ error: 'A foto do painel é obrigatória para este veículo.' });
+      }
+    }
+
+    let kmPrevious = null;
+    let kmDriven = null;
+    let consumptionKml = null;
+    let costPerKm = null;
+
+    if (isOdoWorking === 1 && numKmCurrent) {
+      const lastFuel = await get(
+        env.DB,
+        'SELECT km_current FROM fuel_records WHERE vehicle_id = ? AND odometer_working = 1 AND km_current IS NOT NULL ORDER BY id DESC LIMIT 1',
+        [vehicle_id]
+      );
+      if (lastFuel && lastFuel.km_current) {
+        kmPrevious = parseFloat(lastFuel.km_current);
+        if (numKmCurrent > kmPrevious) {
+          kmDriven = numKmCurrent - kmPrevious;
+          if (numLiters > 0) {
+            consumptionKml = Number((kmDriven / numLiters).toFixed(2));
+            costPerKm = Number((numCost / kmDriven).toFixed(2));
+          }
+        }
+      }
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    let session = await get(
+      env.DB,
+      "SELECT * FROM fueling_sessions WHERE date >= ? AND date <= ? AND status IN ('in_progress', 'draft') ORDER BY id DESC LIMIT 1",
+      [startDate, endDate]
+    );
+    if (!session) {
+      const code = await generateSessionCode(env.DB, today);
+      const sessResult = await run(
+        env.DB,
+        "INSERT INTO fueling_sessions (code, date, status, created_by) VALUES (?, ?, 'in_progress', ?)",
+        [code, today, user?.name || 'Funcionário']
+      );
+      session = await get(env.DB, 'SELECT * FROM fueling_sessions WHERE id = ?', [sessResult.lastInsertRowid]);
+    }
+
+    const assignedFuelType = fuel_type || vehicle.fuel_type_default || 'Diesel S10';
+
+    const insertResult = await run(
+      env.DB,
+      `INSERT INTO fuel_records (
+        session_id, vehicle_id, driver_name, fuel_type, is_full_tank,
+        odometer_working, km_previous, km_current, km_driven,
+        liters, price_per_liter, total_cost, consumption_kml, cost_per_km,
+        photo_dashboard_url, photo_pump_url, notes, created_at
+      ) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+      [
+        session.id,
+        vehicle_id,
+        user?.name || 'Funcionário',
+        assignedFuelType,
+        isOdoWorking,
+        kmPrevious,
+        numKmCurrent,
+        kmDriven,
+        numLiters,
+        numPrice,
+        numCost,
+        consumptionKml,
+        costPerKm,
+        dashPhoto || null,
+        pumpPhoto,
+        notes || null
+      ]
+    );
+
+    await updateSessionAggregates(env.DB, session.id);
+
+    await logAudit(env.DB, {
+      entityType: 'fuel_records',
+      entityId: insertResult.lastInsertRowid,
+      action: 'EMPLOYEE_FUELING',
+      userName: user?.name || 'Funcionário',
+      newData: {
+        vehicle_plate: vehicle.plate,
+        liters: numLiters,
+        cost: numCost,
+        km: numKmCurrent
+      }
+    });
+
+    return Response.json({
+      success: true,
+      message: 'Abastecimento registrado com sucesso!',
+      record_id: insertResult.lastInsertRowid
+    }, { status: 201 });
+  } catch (err) {
+    console.error('Erro ao registrar abastecimento Worker:', err);
+    return Response.json({ error: 'Erro ao registrar abastecimento.' }, { status: 500 });
+  }
+}
+
+export async function updateFuelRecordDirect(request, env, user, id) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const {
+      driver_name, fuel_station, fuel_type, is_full_tank,
+      km_current, liters, price_per_liter, total_cost, payment_method,
+      photo_dashboard_url, photo_pump_url, receipt_url, notes, session_date, justification
+    } = body;
+
+    const record = await get(env.DB, 'SELECT * FROM fuel_records WHERE id = ?', [id]);
+    if (!record) {
+      return Response.json({ error: 'Registro de abastecimento não encontrado.' }, { status: 404 });
+    }
+
+    const vehicle = await get(env.DB, 'SELECT * FROM vehicles WHERE id = ?', [record.vehicle_id]);
+
+    const numLiters = liters !== undefined ? parseFloat(liters) : record.liters;
+    const numPrice = price_per_liter !== undefined ? parseFloat(price_per_liter) : record.price_per_liter;
+    const calculatedTotal = total_cost !== undefined ? parseFloat(total_cost) : (numLiters * numPrice);
+
+    let kmCurrent = record.km_current;
+    let kmPrevious = record.km_previous;
+    let kmDriven = record.km_driven;
+    let consumptionKml = record.consumption_kml;
+    let costPerKm = record.cost_per_km;
+
+    const isOdometerWorking = vehicle ? vehicle.odometer_working === 1 : (record.odometer_working === 1);
+
+    if (isOdometerWorking) {
+      if (km_current !== undefined && km_current !== null) {
+        kmCurrent = parseFloat(km_current);
+      }
+      if (kmPrevious !== null && kmPrevious !== undefined && kmCurrent !== null && kmCurrent >= kmPrevious) {
+        kmDriven = kmCurrent - kmPrevious;
+        if (numLiters > 0) {
+          consumptionKml = parseFloat((kmDriven / numLiters).toFixed(2));
+        }
+        if (kmDriven > 0) {
+          costPerKm = parseFloat((calculatedTotal / kmDriven).toFixed(2));
+        }
+      }
+    } else {
+      kmCurrent = null;
+      kmDriven = null;
+      consumptionKml = null;
+      costPerKm = null;
+    }
+
+    let newCreatedAt = record.created_at;
+    if (session_date) {
+      const timePart = record.created_at && record.created_at.includes(' ') ? record.created_at.split(' ')[1] : '12:00:00';
+      newCreatedAt = `${session_date} ${timePart}`;
+    }
+
+    await run(
+      env.DB,
+      `UPDATE fuel_records SET
+        driver_name = ?, fuel_station = ?, fuel_type = ?, is_full_tank = ?,
+        km_current = ?, km_driven = ?, liters = ?, price_per_liter = ?,
+        total_cost = ?, consumption_kml = ?, cost_per_km = ?, payment_method = ?,
+        photo_dashboard_url = ?, photo_pump_url = ?, receipt_url = ?, notes = ?,
+        created_at = ?
+       WHERE id = ?`,
+      [
+        driver_name !== undefined ? driver_name : record.driver_name,
+        fuel_station !== undefined ? fuel_station : record.fuel_station,
+        fuel_type || record.fuel_type,
+        is_full_tank !== undefined ? (is_full_tank ? 1 : 0) : record.is_full_tank,
+        kmCurrent, kmDriven, numLiters, numPrice, calculatedTotal,
+        consumptionKml, costPerKm,
+        payment_method !== undefined ? payment_method : record.payment_method,
+        photo_dashboard_url !== undefined ? photo_dashboard_url : record.photo_dashboard_url,
+        photo_pump_url !== undefined ? photo_pump_url : record.photo_pump_url,
+        receipt_url !== undefined ? receipt_url : record.receipt_url,
+        notes !== undefined ? notes : record.notes,
+        newCreatedAt,
+        id
+      ]
+    );
+
+    if (record.session_id) {
+      await updateSessionAggregates(env.DB, record.session_id);
+    }
+
+    const updated = await get(
+      env.DB,
+      `SELECT fr.*, v.name as vehicle_name, v.plate as vehicle_plate, v.brand as vehicle_brand, v.model as vehicle_model,
+              fs.code as session_code, fs.date as session_date
+       FROM fuel_records fr
+       JOIN vehicles v ON fr.vehicle_id = v.id
+       LEFT JOIN fueling_sessions fs ON fr.session_id = fs.id
+       WHERE fr.id = ?`,
+      [id]
+    );
+
+    await logAudit(env.DB, {
+      entityType: 'fuel_records',
+      entityId: id,
+      action: 'EDIT_FUEL_RECORD',
+      userName: user?.name || 'Operador',
+      oldData: record,
+      newData: updated,
+      justification: justification || 'Edição de abastecimento.'
+    });
+
+    return Response.json({ record: updated, message: 'Abastecimento atualizado com sucesso.' });
+  } catch (err) {
+    console.error('Erro ao atualizar abastecimento diretamente Worker:', err);
+    return Response.json({ error: 'Erro ao atualizar abastecimento.' }, { status: 500 });
+  }
+}
+
+export async function deleteFuelRecordDirect(request, env, user, id) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const { justification } = body;
+
+    const record = await get(env.DB, 'SELECT * FROM fuel_records WHERE id = ?', [id]);
+    if (!record) {
+      return Response.json({ error: 'Registro de abastecimento não encontrado.' }, { status: 404 });
+    }
+
+    await run(env.DB, 'DELETE FROM fuel_records WHERE id = ?', [id]);
+
+    if (record.session_id) {
+      await updateSessionAggregates(env.DB, record.session_id);
+    }
+
+    await logAudit(env.DB, {
+      entityType: 'fuel_records',
+      entityId: id,
+      action: 'DELETE_FUEL_RECORD',
+      userName: user?.name || 'Operador',
+      oldData: record,
+      justification: justification || 'Exclusão de abastecimento individual.'
+    });
+
+    return Response.json({ message: 'Abastecimento excluído com sucesso.' });
+  } catch (err) {
+    console.error('Erro ao excluir abastecimento diretamente Worker:', err);
+    return Response.json({ error: 'Erro ao excluir abastecimento.' }, { status: 500 });
+  }
+}
+

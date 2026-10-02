@@ -124,6 +124,14 @@ async function handleApiRoute(request, env, pathname, method) {
     return await uploadRoute.uploadFile(request, env);
   }
 
+  // --- Employee Fueling Operational Routes ---
+  if (method === 'GET' && pathname === '/api/fueling/pending-vehicles') {
+    return await sessionRoute.getPendingVehiclesForEmployee(request, env);
+  }
+  if (method === 'POST' && pathname === '/api/fueling/submit') {
+    return await sessionRoute.submitEmployeeFueling(request, env, user);
+  }
+
   // --- Vehicles Routes ---
   if (method === 'GET' && pathname === '/api/vehicles') {
     return await vehicleRoute.listVehicles(request, env);
@@ -166,6 +174,14 @@ async function handleApiRoute(request, env, pathname, method) {
     const [_, sessionId, recordId] = match;
     if (method === 'PUT') return await sessionRoute.updateRecordInCart(request, env, user, sessionId, recordId);
     if (method === 'DELETE') return await sessionRoute.removeRecordFromCart(request, env, user, sessionId, recordId);
+  }
+
+  // --- Standalone Fueling Record Management (Edit & Delete) ---
+  match = pathname.match(/^\/api\/(?:fuelings|fuel-records)\/(\d+)$/);
+  if (match) {
+    const recordId = match[1];
+    if (method === 'PUT') return await sessionRoute.updateFuelRecordDirect(request, env, user, recordId);
+    if (method === 'DELETE') return await sessionRoute.deleteFuelRecordDirect(request, env, user, recordId);
   }
 
   match = pathname.match(/^\/api\/sessions\/(\d+)\/items$/);
@@ -255,15 +271,25 @@ async function handleApiRoute(request, env, pathname, method) {
 
   // --- Users Management Routes ---
   if (method === 'GET' && pathname === '/api/users') {
-    return await userRoute.listUsers(request, env);
+    return await userRoute.listUsers(request, env, user);
   }
   if (method === 'POST' && pathname === '/api/users') {
     return await userRoute.createUser(request, env, user);
   }
+  match = pathname.match(/^\/api\/users\/(\d+)\/status$/);
+  if (match && method === 'PATCH') {
+    return await userRoute.updateUserStatus(request, env, user, match[1]);
+  }
+  match = pathname.match(/^\/api\/users\/(\d+)\/reset-password$/);
+  if (match && method === 'POST') {
+    return await userRoute.resetUserPassword(request, env, user, match[1]);
+  }
   match = pathname.match(/^\/api\/users\/(\d+)$/);
-  if (match && method === 'PUT') {
-    return await userRoute.updateUser(request, env, user, match[1]);
+  if (match) {
+    if (method === 'PUT') return await userRoute.updateUser(request, env, user, match[1]);
+    if (method === 'DELETE') return await userRoute.deleteUser(request, env, user, match[1]);
   }
 
   return Response.json({ error: `Rota não encontrada: ${method} ${pathname}` }, { status: 404 });
 }
+

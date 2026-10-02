@@ -406,41 +406,56 @@ export default function Dashboard({ setActiveTab, onOpenFuelingModal }) {
           </div>
         </div>
 
-        {/* Alerts & System Notifications */}
+        {/* Recent Fueling Sessions & Operational Summary */}
         <div className="bg-slate-900/80 border border-slate-800 p-5 rounded-3xl space-y-3 lg:col-span-2">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-sm text-white flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 text-amber-400" /> Alertas Operacionais e Vencimentos
+              <Clock className="w-4 h-4 text-emerald-400" /> Sessões Recentes de Abastecimento
             </h3>
-            <span className="text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-bold">
-              {alerts.length} {alerts.length === 1 ? 'alerta' : 'alertas'}
-            </span>
+            <button
+              onClick={() => setActiveTab('history')}
+              className="text-xs text-emerald-400 hover:text-emerald-300 font-bold hover:underline cursor-pointer"
+            >
+              Ver histórico completo →
+            </button>
           </div>
 
           <div className="space-y-2.5 max-h-56 overflow-y-auto">
-            {alerts.length > 0 ? (
-              alerts.map((alert, idx) => (
+            {data?.recent_sessions && data.recent_sessions.length > 0 ? (
+              data.recent_sessions.map((sess) => (
                 <div
-                  key={idx}
-                  className={`p-3 rounded-2xl text-xs flex items-start gap-3 border ${
-                    alert.type === 'danger'
-                      ? 'bg-rose-500/10 border-rose-500/30 text-rose-200'
-                      : 'bg-amber-500/10 border-amber-500/30 text-amber-200'
-                  }`}
+                  key={sess.id}
+                  onClick={() => setActiveTab('history')}
+                  className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800/80 hover:border-emerald-500/40 text-xs flex items-center justify-between gap-3 cursor-pointer transition-colors"
                 >
-                  <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${alert.type === 'danger' ? 'text-rose-400' : 'text-amber-400'}`} />
-                  <div className="flex-1">
-                    <span className="font-bold text-[11px] uppercase tracking-wider block mb-0.5">
-                      [{alert.category}]
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold text-xs shrink-0">
+                      ⛽
+                    </div>
+                    <div>
+                      <p className="font-bold text-white">
+                        {sess.date ? sess.date.split('-').reverse().join('/') : 'Data não informada'}
+                        <span className="text-[10px] text-slate-400 font-mono ml-2 font-normal">({sess.code})</span>
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        {sess.total_vehicles || 0} veículos • {Number(sess.total_liters || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} L
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-black text-emerald-400 block text-xs sm:text-sm">
+                      R$ {Number(sess.total_cost || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </span>
-                    <p className="leading-relaxed">{alert.message}</p>
+                    <span className="text-[10px] text-slate-500">
+                      {sess.status === 'completed' ? 'Finalizado' : 'Em andamento'}
+                    </span>
                   </div>
                 </div>
               ))
             ) : (
               <div className="p-6 text-center text-xs text-slate-500">
                 <CheckCircle2 className="w-8 h-8 text-emerald-500/40 mx-auto mb-2" />
-                Nenhuma pendência ou vencimento crítico identificado.
+                Nenhum abastecimento recente cadastrado.
               </div>
             )}
           </div>

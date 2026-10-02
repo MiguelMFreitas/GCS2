@@ -3,6 +3,13 @@ import { authService } from '../services/api';
 
 const AuthContext = createContext(null);
 
+export function normalizeRole(role) {
+  const r = String(role || '').toLowerCase().trim();
+  if (r === 'admin' || r === 'gerente') return 'gerente';
+  if (r === 'encarregado' || r === 'supervisor') return 'encarregado';
+  return 'funcionario';
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [authStatus, setAuthStatus] = useState('loading'); // 'loading' | 'authenticated' | 'unauthenticated'
@@ -12,9 +19,13 @@ export function AuthProvider({ children }) {
     try {
       const res = await authService.getMe();
       if (res.data?.authenticated && res.data?.user) {
-        setUser(res.data.user);
+        const u = {
+          ...res.data.user,
+          role: normalizeRole(res.data.user.role)
+        };
+        setUser(u);
         setAuthStatus('authenticated');
-        return res.data.user;
+        return u;
       } else {
         setUser(null);
         setAuthStatus('unauthenticated');
@@ -45,7 +56,11 @@ export function AuthProvider({ children }) {
       localStorage.setItem('gcs2_token', token);
     }
     if (loginUser) {
-      localStorage.setItem('gcs2_user', JSON.stringify(loginUser));
+      const u = {
+        ...loginUser,
+        role: normalizeRole(loginUser.role)
+      };
+      localStorage.setItem('gcs2_user', JSON.stringify(u));
     }
 
     // 2. Immediately verify session with cookie / api
@@ -56,13 +71,18 @@ export function AuthProvider({ children }) {
 
     // 3. Fallback to direct returned user if cookie is same-origin
     if (loginUser) {
-      setUser(loginUser);
+      const u = {
+        ...loginUser,
+        role: normalizeRole(loginUser.role)
+      };
+      setUser(u);
       setAuthStatus('authenticated');
       return res.data;
     }
 
     throw new Error('Falha ao autenticar sessão no servidor.');
   };
+
 
   const logout = async () => {
     setAuthStatus('loading');

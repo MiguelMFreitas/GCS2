@@ -18,14 +18,13 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Response interceptor
+// Response interceptor: only clear storage if session verification (/auth/me) explicitly fails with 401
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // If receiving 401 on business APIs (not auth check endpoints), clear storage
     if (error.response?.status === 401) {
-      const isAuthEndpoint = error.config?.url?.includes('/auth/');
-      if (!isAuthEndpoint) {
+      const url = error.config?.url || '';
+      if (url.includes('/auth/me')) {
         localStorage.removeItem('gcs2_token');
         localStorage.removeItem('gcs2_user');
       }
@@ -100,10 +99,27 @@ export const uploadService = {
   uploadFile: (file) => {
     const formData = new FormData();
     formData.append('file', file);
-    return api.post('/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    return api.post('/upload', formData);
   },
 };
 
+export const userService = {
+  list: (params) => api.get('/users', { params }),
+  create: (data) => api.post('/users', data),
+  update: (id, data) => api.put(`/users/${id}`, data),
+  updateStatus: (id, active) => api.patch(`/users/${id}/status`, { active }),
+  resetPassword: (id, new_password) => api.post(`/users/${id}/reset-password`, { new_password }),
+  delete: (id) => api.delete(`/users/${id}`),
+};
+
+export const fuelingService = {
+  getPendingVehicles: () => api.get('/fueling/pending-vehicles'),
+  submitEmployeeFueling: (data) => api.post('/fueling/submit', data),
+  update: (id, data) => api.put(`/fuelings/${id}`, data),
+  delete: (id, data) => api.delete(`/fuelings/${id}`, { data }),
+};
+
 export default api;
+
+
+

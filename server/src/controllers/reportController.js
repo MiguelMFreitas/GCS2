@@ -228,11 +228,51 @@ export function getDashboardStats(req, res) {
   }
 }
 
+function getWeekRangeForDate(dateStr) {
+  if (!dateStr) return { weekKey: 'unknown', startDate: '', endDate: '', label: 'Sem data' };
+  const cleanDate = dateStr.split('T')[0].split(' ')[0];
+  const [y, m, d] = cleanDate.split('-').map(Number);
+  const targetDate = new Date(y, m - 1, d, 12, 0, 0);
+  const day = targetDate.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  
+  const monday = new Date(targetDate);
+  monday.setDate(targetDate.getDate() + diffToMonday);
+  
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  
+  const formatYMD = (dt) => {
+    const yr = dt.getFullYear();
+    const mo = String(dt.getMonth() + 1).padStart(2, '0');
+    const da = String(dt.getDate()).padStart(2, '0');
+    return `${yr}-${mo}-${da}`;
+  };
+
+  const formatBR = (dt) => {
+    const da = String(dt.getDate()).padStart(2, '0');
+    const mo = String(dt.getMonth() + 1).padStart(2, '0');
+    const yr = dt.getFullYear();
+    return `${da}/${mo}/${yr}`;
+  };
+
+  const startYMD = formatYMD(monday);
+  const endYMD = formatYMD(sunday);
+
+  return {
+    weekKey: `${startYMD}_${endYMD}`,
+    startDate: startYMD,
+    endDate: endYMD,
+    label: `Semana ${formatBR(monday)} a ${formatBR(sunday)}`
+  };
+}
+
 export function getFleetReports(req, res) {
   try {
     const { period, start_date, end_date, vehicle_id, fuel_type } = req.query;
     let sql = `
       SELECT fr.*, v.name as vehicle_name, v.plate as vehicle_plate, v.brand as vehicle_brand,
+             v.model as vehicle_model, v.year_fab, v.year_model,
              fs.code as session_code, fs.date as session_date
       FROM fuel_records fr
       JOIN vehicles v ON fr.vehicle_id = v.id
@@ -250,48 +290,206 @@ export function getFleetReports(req, res) {
       params.push(`%${fuel_type}%`);
     }
     if (start_date) {
-      sql += ' AND (fr.created_at >= ? OR fs.date >= ?)';
-      params.push(start_date, start_date);
+      sql += ' AND COALESCE(NULLIF(fs.date, ""), date(fr.created_at, "localtime"), date(fr.created_at), substr(fr.created_at, 1, 10)) >= ?';
+      params.push(start_date);
     }
     if (end_date) {
-      sql += ' AND (fr.created_at <= ? OR fs.date <= ?)';
-      params.push(end_date + ' 23:59:59', end_date);
+      sql += ' AND COALESCE(NULLIF(fs.date, ""), date(fr.created_at, "localtime"), date(fr.created_at), substr(fr.created_at, 1, 10)) <= ?';
+      params.push(end_date);
     }
 
     sql += ' ORDER BY fr.id DESC';
     const records = query(sql, params);
 
-    // Grouping and sums
-    let totalCost = 0;
-    let totalLiters = 0;
-    let totalKm = 0;
-    let validKmCount = 0;
-    let sumKml = 0;
+    // Grouping by Vehicle
+    const vehicleMap = new Map();
+    records.forEach(r => {
+      const vId = r.vehicle_id;
+      if (!vehicleMap.has(vId)) {
+        vehicleMap.set(vId, {
+          vehicle_id: vId,
+          vehicle_name: r.vehicle_name,
+          vehicle_plate: r.vehicle_plate,
+          vehicle_brand: r.vehicle_brand,
+          vehicle_model: r.vehicle_model,
+          vehicle_year: `${r.year_fab || ''}/${r.year_model || ''}`.replace(/^\/|\/$/g, '') || '-',
+          odometer_working: r.odometer_working,
+          records: []
+        });
+      }
+      vehicleMap.get(vId).records.push(r);
+    });
+
+    const vehicles_data = Array.from(vehicleMap.values()).map(v => {
+      // Sort vehicle fuelings chronologically
+      v.records.sort((a, b) => {
+        const dateA = a.session_date || a.created_at || '';
+        const dateB = b.session_date || b.created_at || '';
+        return dateA.localeCompare(dateB) || a.id - b.id;
+      });
+
+      let totalCost = 0;
+      let totalLiters = 0;
+      let totalKm = 0;
+      const validKmlValues = [];
+      const weekMap = new Map();
+
+      v.records.forEach(r => {
+        totalCost += Number(r.total_cost || 0);
+        totalLiters += Number(r.liters || 0);
+        if (r.km_driven && Number(r.km_driven) > 0) {
+          totalKm += Number(r.km_driven);
+        }
+        const isOdometerWorking = r.odometer_working === 1 || r.odometer_working === true || r.odometer_working === '1';
+        const kml = Number(r.consumption_kml);
+        const hasValidKml = isOdometerWorking && kml > 0 && kml < 100;
+
+        if (hasValidKml) {
+          validKmlValues.push(kml);
+        }
+
+        // Weekly grouping within the vehicle
+        const dateStr = r.session_date || r.created_at;
+        const weekInfo = getWeekRangeForDate(dateStr);
+        if (!weekMap.has(weekInfo.weekKey)) {
+          weekMap.set(weekInfo.weekKey, {
+            week_key: weekInfo.weekKey,
+            week_label: weekInfo.label,
+            start_date: weekInfo.startDate,
+            end_date: weekInfo.endDate,
+            fuelings_count: 0,
+            total_liters: 0,
+            total_cost: 0,
+            total_km: 0,
+            kml_values: []
+          });
+        }
+        const w = weekMap.get(weekInfo.weekKey);
+        w.fuelings_count += 1;
+        w.total_liters += Number(r.liters || 0);
+        w.total_cost += Number(r.total_cost || 0);
+        if (r.km_driven && Number(r.km_driven) > 0) {
+          w.total_km += Number(r.km_driven);
+        }
+        if (hasValidKml) {
+          w.kml_values.push(kml);
+        }
+      });
+
+      const weekly_averages = Array.from(weekMap.values())
+        .sort((a, b) => a.start_date.localeCompare(b.start_date))
+        .map(w => ({
+          week_key: w.week_key,
+          week_label: w.week_label,
+          start_date: w.start_date,
+          end_date: w.end_date,
+          fuelings_count: w.fuelings_count,
+          total_liters: Number(w.total_liters.toFixed(2)),
+          total_cost: Number(w.total_cost.toFixed(2)),
+          total_km: Number(w.total_km.toFixed(1)),
+          avg_consumption_kml: w.kml_values.length > 0
+            ? Number((w.kml_values.reduce((s, val) => s + val, 0) / w.kml_values.length).toFixed(2))
+            : null
+        }));
+
+      const avgKml = validKmlValues.length > 0
+        ? Number((validKmlValues.reduce((s, val) => s + val, 0) / validKmlValues.length).toFixed(2))
+        : null;
+
+      const avgLiters = v.records.length > 0 ? Number((totalLiters / v.records.length).toFixed(2)) : 0;
+      const avgTotalCost = v.records.length > 0 ? Number((totalCost / v.records.length).toFixed(2)) : 0;
+      const avgPricePerLiter = v.records.length > 0
+        ? Number((v.records.reduce((s, r) => s + Number(r.price_per_liter || 0), 0) / v.records.length).toFixed(2))
+        : 0;
+
+      return {
+        ...v,
+        summary: {
+          fuelings_count: v.records.length,
+          total_cost: Number(totalCost.toFixed(2)),
+          total_liters: Number(totalLiters.toFixed(2)),
+          total_km: Number(totalKm.toFixed(1)),
+          avg_liters: avgLiters,
+          avg_total_cost: avgTotalCost,
+          avg_price_per_liter: avgPricePerLiter,
+          avg_consumption_kml: avgKml,
+          weekly_averages
+        }
+      };
+    });
+
+    // Overall Fleet Summary
+    let fleetTotalCost = 0;
+    let fleetTotalLiters = 0;
+    let fleetTotalKm = 0;
+    const fleetValidKmlValues = [];
+    const fuelGroupMap = new Map();
 
     records.forEach(r => {
-      totalCost += Number(r.total_cost || 0);
-      totalLiters += Number(r.liters || 0);
-      if (r.km_driven && r.km_driven > 0) {
-        totalKm += Number(r.km_driven);
+      fleetTotalCost += Number(r.total_cost || 0);
+      fleetTotalLiters += Number(r.liters || 0);
+      if (r.km_driven && Number(r.km_driven) > 0) {
+        fleetTotalKm += Number(r.km_driven);
       }
-      if (r.odometer_working === 1 && r.consumption_kml && r.consumption_kml > 0) {
-        validKmCount++;
-        sumKml += Number(r.consumption_kml);
+      const isOdometerWorking = r.odometer_working === 1 || r.odometer_working === true || r.odometer_working === '1';
+      const kml = Number(r.consumption_kml);
+      if (isOdometerWorking && kml > 0 && kml < 100) {
+        fleetValidKmlValues.push(kml);
       }
+
+      let fuelName = r.fuel_type || 'Diesel S10';
+      if (fuelName.toUpperCase() === 'FLEX') fuelName = 'Gasolina';
+      if (!fuelGroupMap.has(fuelName)) {
+        fuelGroupMap.set(fuelName, { name: fuelName, count: 0, liters: 0, total_cost: 0 });
+      }
+      const f = fuelGroupMap.get(fuelName);
+      f.count += 1;
+      f.liters += Number(r.liters || 0);
+      f.total_cost += Number(r.total_cost || 0);
     });
+
+    const fleetAvgKml = fleetValidKmlValues.length > 0
+      ? Number((fleetValidKmlValues.reduce((s, val) => s + val, 0) / fleetValidKmlValues.length).toFixed(2))
+      : null;
+
+    const fleetAvgLiters = records.length > 0 ? Number((fleetTotalLiters / records.length).toFixed(2)) : 0;
+    const fleetAvgCost = records.length > 0 ? Number((fleetTotalCost / records.length).toFixed(2)) : 0;
+    const fleetAvgPrice = records.length > 0
+      ? Number((records.reduce((s, r) => s + Number(r.price_per_liter || 0), 0) / records.length).toFixed(2))
+      : 0;
+
+    const fuels = Array.from(fuelGroupMap.values()).map(f => ({
+      name: f.name,
+      count: f.count,
+      liters: Number(f.liters.toFixed(2)),
+      total_cost: Number(f.total_cost.toFixed(2))
+    }));
+
+    console.log(`📊 [Reports Backend] Consulta executada. Encontrados: ${records.length} abastecimentos, ${vehicles_data.length} veículos.`);
 
     return res.json({
       records,
+      vehicles_data,
       summary: {
+        total_vehicles: vehicles_data.length,
         total_records: records.length,
-        total_cost: Number(totalCost.toFixed(2)),
-        total_liters: Number(totalLiters.toFixed(2)),
-        total_km: Number(totalKm.toFixed(1)),
-        avg_consumption_kml: validKmCount > 0 ? Number((sumKml / validKmCount).toFixed(2)) : null
+        total_cost: Number(fleetTotalCost.toFixed(2)),
+        total_liters: Number(fleetTotalLiters.toFixed(2)),
+        total_km: Number(fleetTotalKm.toFixed(1)),
+        avg_liters_per_fueling: fleetAvgLiters,
+        avg_cost_per_fueling: fleetAvgCost,
+        avg_price_per_liter: fleetAvgPrice,
+        avg_consumption_kml: fleetAvgKml,
+        fuels
       }
     });
   } catch (err) {
-    return res.status(500).json({ error: 'Erro ao gerar relatório.' });
+    console.error('❌ [Reports Backend] Erro ao gerar relatório:', {
+      message: err.message,
+      stack: err.stack,
+      query: req.query
+    });
+    return res.status(500).json({ error: 'Erro ao gerar relatório.', details: err.message });
   }
 }
 

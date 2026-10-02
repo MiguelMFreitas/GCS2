@@ -24,26 +24,38 @@ export default function Layout({ children, activeTab, setActiveTab, onOpenVehicl
   const { itemCount, totalCost, hasUnfinishedSession } = useFuelingCart();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const navItems = [
-    { id: 'dashboard', label: 'Início', icon: LayoutDashboard },
-    { id: 'weekly-fueling', label: 'Abastecimento da Semana', icon: Fuel, badge: 'Principal' },
-    { id: 'cart', label: 'Carrinho de Abastecimento', icon: ShoppingCart, count: itemCount },
-    { id: 'vehicles', label: 'Veículos', icon: Truck },
-    { id: 'history', label: 'Histórico', icon: History },
-    { id: 'reports', label: 'Relatórios', icon: FileBarChart },
-    { id: 'expenses', label: 'Despesas e Manutenções', icon: Wrench },
-    { id: 'users', label: 'Usuários', icon: Users },
-    { id: 'settings', label: 'Configurações', icon: Settings },
-  ];
+  const role = String(user?.role || '').toLowerCase();
+  const isGerente = role === 'admin' || role === 'gerente';
+  const isEncarregado = role === 'encarregado' || role === 'supervisor';
+
+  const navItems = isGerente
+    ? [
+        { id: 'dashboard', label: 'Início', icon: LayoutDashboard },
+        { id: 'weekly-fueling', label: 'Abastecimento da Semana', icon: Fuel, badge: 'Principal' },
+        { id: 'cart', label: 'Carrinho de Abastecimento', icon: ShoppingCart, count: itemCount },
+        { id: 'vehicles', label: 'Veículos', icon: Truck },
+        { id: 'history', label: 'Histórico', icon: History },
+        { id: 'reports', label: 'Relatórios', icon: FileBarChart },
+        { id: 'users', label: 'Usuários', icon: Users },
+        { id: 'settings', label: 'Configurações', icon: Settings },
+      ]
+    : [
+        { id: 'weekly-fueling', label: 'Início Operacional', icon: Fuel, badge: 'Principal' },
+        { id: 'cart', label: 'Carrinho de Abastecimento', icon: ShoppingCart, count: itemCount },
+        { id: 'history', label: 'Histórico', icon: History },
+        { id: 'reports', label: 'Relatórios', icon: FileBarChart },
+      ];
+
+  const defaultHome = isGerente ? 'dashboard' : 'weekly-fueling';
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col md:flex-row pb-24 md:pb-0">
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col w-72 bg-slate-900 border-r border-slate-800 shrink-0 sticky top-0 h-screen overflow-y-auto">
-        {/* Brand Header: Unified Clickable Area (Requirements 1, 2, 3, 4) */}
+        {/* Brand Header: Unified Clickable Area */}
         <div className="p-6 border-b border-slate-800 flex items-center justify-between">
           <button
-            onClick={() => setActiveTab('dashboard')}
+            onClick={() => setActiveTab(defaultHome)}
             aria-label="Voltar para página inicial"
             className="flex items-center gap-3 text-left group cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/50 rounded-2xl p-1.5 -m-1.5 transition-all hover:bg-slate-800/60"
           >
@@ -99,14 +111,21 @@ export default function Layout({ children, activeTab, setActiveTab, onOpenVehicl
         <div className="p-4 border-t border-slate-800 bg-slate-900/50">
           <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center font-black text-xs text-emerald-400 shrink-0">
-                {(user?.name || user?.username || 'G').charAt(0).toUpperCase()}
+              <div className={`w-9 h-9 rounded-full ${
+                isGerente
+                  ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
+                  : 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+              } border flex items-center justify-center font-black text-xs shrink-0`}>
+                {(user?.name || user?.username || 'U').charAt(0).toUpperCase()}
               </div>
               <div className="truncate text-left">
-                <p className="text-xs font-bold text-white truncate">{user?.name || user?.username || 'Gerente'}</p>
-                <p className="text-[11px] text-emerald-400 font-semibold truncate">
-                  {user?.role === 'admin' ? 'Administrador' : (user?.role === 'operator' ? 'Operador de Pista' : (user?.role || 'Usuário'))}
-                </p>
+                <p className="text-xs font-bold text-white truncate">{user?.name || user?.username || 'Usuário'}</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${isGerente ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                  <p className={`text-[10px] font-bold uppercase tracking-wider ${isGerente ? 'text-emerald-400' : 'text-amber-400'} truncate`}>
+                    {isGerente ? 'Gerente (Total)' : 'Encarregado'}
+                  </p>
+                </div>
               </div>
             </div>
             <button
@@ -119,6 +138,8 @@ export default function Layout({ children, activeTab, setActiveTab, onOpenVehicl
           </div>
         </div>
       </aside>
+
+
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -198,8 +219,13 @@ export default function Layout({ children, activeTab, setActiveTab, onOpenVehicl
             })}
             <div className="pt-3 mt-2 border-t border-slate-800 flex items-center justify-between px-2">
               <div>
-                <span className="text-xs font-bold text-white block">{user?.name || user?.username || 'Gerente'}</span>
-                <span className="text-[10px] text-emerald-400 font-semibold">{user?.role === 'admin' ? 'Administrador' : 'Operador'}</span>
+                <span className="text-xs font-bold text-white block">{user?.name || user?.username || 'Usuário'}</span>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${isGerente ? 'bg-emerald-400' : 'bg-blue-400'}`} />
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${isGerente ? 'text-emerald-400' : 'text-blue-400'}`}>
+                    {isGerente ? 'Gerente (Total)' : 'Funcionário'}
+                  </span>
+                </div>
               </div>
               <button
                 onClick={logout}
