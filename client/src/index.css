@@ -6,6 +6,45 @@
   body {
     @apply bg-slate-950 text-slate-100 antialiased font-sans;
   }
+
+  /* Foco visível para quem navega pelo teclado */
+  :focus-visible {
+    outline: 2px solid rgb(16 185 129 / 0.7);
+    outline-offset: 2px;
+  }
+
+  /* Remove as setas dos campos numéricos */
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  /* Ícone do calendário visível no tema escuro */
+  input[type='date']::-webkit-calendar-picker-indicator {
+    filter: invert(0.8);
+    cursor: pointer;
+  }
+}
+
+/* Animações de entrada usadas por modais e menus (animate-in, fade-in, zoom-in-95,
+   slide-in-from-top-*). Equivalente ao plugin tailwindcss-animate, que não está instalado. */
+@keyframes gcs-enter {
+  from {
+    opacity: var(--gcs-enter-opacity, 1);
+    transform: translateY(var(--gcs-enter-y, 0)) scale(var(--gcs-enter-scale, 1));
+  }
+}
+.animate-in { animation: gcs-enter 200ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.fade-in { --gcs-enter-opacity: 0; }
+.zoom-in-95 { --gcs-enter-scale: 0.95; }
+.slide-in-from-top-2 { --gcs-enter-y: -0.5rem; }
+.slide-in-from-top-3 { --gcs-enter-y: -0.75rem; }
+.slide-in-from-top-4 { --gcs-enter-y: -1rem; }
+.slide-in-from-bottom-4 { --gcs-enter-y: 1rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-in { animation: none; }
 }
 
 /* Custom Scrollbar */

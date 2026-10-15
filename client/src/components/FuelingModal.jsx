@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { useFuelingCart } from '../context/FuelingCartContext';
 import { vehicleService, uploadService, fuelingService } from '../services/api';
+import { todayLocal } from '../utils/date';
+import { formatFuelType } from './VehicleCard';
 
 export default function FuelingModal({
   vehicle,
@@ -27,7 +29,7 @@ export default function FuelingModal({
   const { addToCart, updateCartItem } = useFuelingCart();
 
   // Date
-  const [fuelDate, setFuelDate] = useState(new Date().toISOString().split('T')[0]);
+  const [fuelDate, setFuelDate] = useState(todayLocal());
 
   // 3 Fuel variables (Raw numeric inputs typed by user)
   const [userTotalCost, setUserTotalCost] = useState(null);
@@ -115,7 +117,7 @@ export default function FuelingModal({
   const kmCurrentDisplay = rawKmCurrent !== null ? rawKmCurrent.toLocaleString('pt-BR') : '';
 
   const resetForm = () => {
-    setFuelDate(new Date().toISOString().split('T')[0]);
+    setFuelDate(todayLocal());
     setUserTotalCost(null);
     setUserPricePerLiter(null);
     setUserLiters(null);
@@ -138,7 +140,7 @@ export default function FuelingModal({
     setDuplicateWarning(null);
 
     if (existingRecord) {
-      setFuelDate(existingRecord.session_date || existingRecord.created_at?.split('T')[0] || new Date().toISOString().split('T')[0]);
+      setFuelDate(existingRecord.session_date || existingRecord.created_at?.split('T')[0] || todayLocal());
       
       const numTotal = Number(existingRecord.total_cost) || 0;
       const numPrice = Number(existingRecord.price_per_liter) || 0;
@@ -426,7 +428,7 @@ export default function FuelingModal({
                 </p>
               ) : (
                 <p className="text-xs text-slate-400">
-                  {vehicle.brand} • {vehicle.fuel_type_default || 'Diesel'}
+                  {vehicle.brand} • {formatFuelType(vehicle.fuel_type_default)}
                 </p>
               )}
             </div>

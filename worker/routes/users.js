@@ -1,3 +1,7 @@
+// User Management Controller for Cloudflare Workers & D1
+import { query, get, run } from '../utils/db.js';
+import { hashPassword } from '../utils/auth.js';
+
 function normalizeRole(role) {
   const r = String(role || '').toLowerCase().trim();
   if (r === 'admin' || r === 'gerente') return 'gerente';

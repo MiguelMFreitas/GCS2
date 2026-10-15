@@ -5,7 +5,10 @@ import { useAuth } from './AuthContext';
 const FuelingCartContext = createContext(null);
 
 export function FuelingCartProvider({ children }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  // O carrinho é do Gerente/Encarregado; o Funcionário usa só a tela de abastecimento simples
+  const role = String(user?.role || '').toLowerCase();
+  const usesCart = isAuthenticated && ['admin', 'gerente', 'encarregado', 'supervisor'].includes(role);
   const [activeSession, setActiveSession] = useState(null);
   const [cartItems, setCartItems] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -13,7 +16,7 @@ export function FuelingCartProvider({ children }) {
   const [error, setError] = useState(null);
 
   const refreshCart = useCallback(async () => {
-    if (!isAuthenticated) return;
+    if (!usesCart) return;
     setLoading(true);
     try {
       const res = await sessionService.getActive();
@@ -27,17 +30,17 @@ export function FuelingCartProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [usesCart]);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (usesCart) {
       refreshCart();
     } else {
       setActiveSession(null);
       setCartItems([]);
       setSummary(null);
     }
-  }, [isAuthenticated, refreshCart]);
+  }, [usesCart, refreshCart]);
 
   const startSession = async (date, notes) => {
     try {
@@ -50,16 +53,12 @@ export function FuelingCartProvider({ children }) {
   };
 
   const addToCart = async (vehicleFuelData, force = false) => {
-    if (!activeSession) {
-      // Auto-start a session if none is open
-      const newSess = await startSession();
-      const res = await sessionService.addToCart(newSess.id, { ...vehicleFuelData, force });
-      await refreshCart();
-      return res.data;
-    }
-
     try {
-      const res = await sessionService.addToCart(activeSession.id, { ...vehicleFuelData, force });
+      // Abre a sessão automaticamente, na data escolhida no formulário de abastecimento
+      const sessionId = activeSession
+        ? activeSession.id
+        : (await startSession(vehicleFuelData.session_date)).id;
+      const res = await sessionService.addToCart(sessionId, { ...vehicleFuelData, force });
       await refreshCart();
       return res.data;
     } catch (err) {

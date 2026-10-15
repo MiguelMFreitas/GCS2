@@ -338,7 +338,7 @@ export default function SessionReport({ sessionId, onBack, setActiveTab }) {
                       {formatLiters(r.liters)}
                     </span>
                     <span className="text-[10px] text-slate-400">
-                      R$ {Number(r.price_per_liter || 0).toFixed(2)}/L
+                      R$ {Number(r.price_per_liter || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/L
                     </span>
                   </div>
 
@@ -347,7 +347,7 @@ export default function SessionReport({ sessionId, onBack, setActiveTab }) {
                     <span className="text-[10px] text-slate-400 block font-semibold">Custo por KM</span>
                     <span className="font-bold text-slate-200 block">
                       {hasOdometer && r.cost_per_km
-                        ? `R$ ${Number(r.cost_per_km).toFixed(2)}/km`
+                        ? `R$ ${Number(r.cost_per_km).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/km`
                         : '—'}
                     </span>
                   </div>

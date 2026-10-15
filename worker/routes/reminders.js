@@ -1,5 +1,6 @@
 // Maintenance Reminders Controller for Cloudflare Workers & D1
 import { query, get, run } from '../utils/db.js';
+import { todayBR } from '../utils/date.js';
 
 export async function listReminders(request, env) {
   try {
@@ -30,7 +31,7 @@ export async function listReminders(request, env) {
     sql += ' ORDER BY mr.trigger_date ASC, mr.trigger_km ASC';
     const reminders = await query(env.DB, sql, params);
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayBR();
     const enriched = reminders.map(r => {
       let isDueByDate = false;
       let isDueByKm = false;

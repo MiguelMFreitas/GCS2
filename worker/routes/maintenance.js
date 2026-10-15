@@ -1,6 +1,7 @@
 // Maintenance Controller for Cloudflare Workers & D1
 import { query, get, run } from '../utils/db.js';
 import { logAudit } from '../utils/audit.js';
+import { todayBR } from '../utils/date.js';
 
 export async function listMaintenance(request, env) {
   try {
@@ -144,7 +145,7 @@ export async function updateMaintenance(request, env, user, id) {
           status_return_forecast = null,
           updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
-        [exit_date || new Date().toISOString().split('T')[0], existing.vehicle_id]
+        [exit_date || todayBR(), existing.vehicle_id]
       );
     }
 

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Fuel, Lock, User, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { authService } from '../services/api';
+import { Fuel, Lock, User, ArrowRight, AlertCircle, CheckCircle2, KeyRound } from 'lucide-react';
 
 export default function Login() {
   const { login } = useAuth();
@@ -11,8 +10,6 @@ export default function Login() {
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [forgotModalOpen, setForgotModalOpen] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotFeedback, setForgotFeedback] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -26,16 +23,6 @@ export default function Login() {
     } catch (err) {
       setErrorMsg(err.response?.data?.error || err.message || 'Usuário ou senha incorretos.');
       setLoading(false);
-    }
-  };
-
-  const handleForgotPassword = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await authService.forgotPassword({ email: forgotEmail });
-      setForgotFeedback(res.data.message || 'Instruções enviadas para o e-mail informado.');
-    } catch (err) {
-      setForgotFeedback(err.response?.data?.error || 'Não foi possível solicitar a redefinição de senha.');
     }
   };
 
@@ -159,42 +146,23 @@ export default function Login() {
       {forgotModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-sm space-y-4 shadow-2xl">
-            <h3 className="text-base font-bold text-white">Recuperar Senha</h3>
-            <p className="text-xs text-slate-400">
-              Digite seu usuário ou e-mail cadastrado para obter orientações de redefinição.
+            <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+              <KeyRound className="w-5 h-5" />
+            </div>
+            <h3 className="text-base font-bold text-white">Esqueceu sua senha?</h3>
+            <p className="text-sm text-slate-300 leading-relaxed">
+              Por segurança, a senha é redefinida pelo <strong className="text-white">Gerente</strong> do sistema.
+            </p>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Peça a ele para acessar <strong className="text-slate-200">Usuários → Redefinir senha</strong> na sua conta.
+              Depois de entrar, você pode trocar a senha provisória.
             </p>
 
-            {forgotFeedback ? (
-              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs">
-                {forgotFeedback}
-              </div>
-            ) : (
-              <form onSubmit={handleForgotPassword} className="space-y-3">
-                <input
-                  type="text"
-                  placeholder="Seu usuário ou e-mail"
-                  value={forgotEmail}
-                  onChange={(e) => setForgotEmail(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white"
-                  required
-                />
-                <button
-                  type="submit"
-                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
-                >
-                  Enviar Solicitação
-                </button>
-              </form>
-            )}
-
             <button
-              onClick={() => {
-                setForgotModalOpen(false);
-                setForgotFeedback('');
-              }}
-              className="w-full text-center text-xs text-slate-400 hover:text-white pt-2"
+              onClick={() => setForgotModalOpen(false)}
+              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition-colors"
             >
-              Voltar ao Login
+              Entendi, voltar ao login
             </button>
           </div>
         </div>

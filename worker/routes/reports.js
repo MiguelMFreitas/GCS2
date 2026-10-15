@@ -1,37 +1,7 @@
 // Reports & Dashboard Stats Controller for Cloudflare Workers & D1
 import { query, get } from '../utils/db.js';
 import * as XLSX from 'xlsx';
-
-function getMondayAndSunday(dateStr) {
-  let targetDate;
-  if (dateStr) {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    targetDate = new Date(y, m - 1, d, 12, 0, 0);
-  } else {
-    targetDate = new Date();
-  }
-  
-  const day = targetDate.getDay();
-  const diffToMonday = day === 0 ? -6 : 1 - day;
-  
-  const monday = new Date(targetDate);
-  monday.setDate(targetDate.getDate() + diffToMonday);
-  
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  
-  const formatYMD = (d) => {
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const dateNum = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${dateNum}`;
-  };
-
-  return {
-    startDate: formatYMD(monday),
-    endDate: formatYMD(sunday)
-  };
-}
+import { getMondayAndSunday } from '../utils/date.js';
 
 export async function getDashboardStats(request, env) {
   try {

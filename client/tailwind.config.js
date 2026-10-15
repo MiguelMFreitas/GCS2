@@ -20,6 +20,11 @@ export default {
           900: '#14532d',
           950: '#052e16',
         },
+        // Tons intermediários usados nos hovers (não existem no Tailwind padrão)
+        slate: {
+          750: '#283548',
+          850: '#172033',
+        },
         navy: {
           800: '#0f172a',
           900: '#020617',

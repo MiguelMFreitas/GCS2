@@ -91,11 +91,11 @@ export default function WeeklyFueling({ setActiveTab, onOpenVehicleModal }) {
       <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/50 border border-slate-800 rounded-3xl p-5 sm:p-7 shadow-xl space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1">
               <Calendar className="w-3.5 h-3.5" />
               <span>Sessão: {activeSession?.code || 'Nova Sessão'}</span>
               <span>•</span>
-              <span>Período: {currentDateFormatted}</span>
+              <span>Data: {currentDateFormatted}</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white">
               Abastecimento da Semana
@@ -108,14 +108,14 @@ export default function WeeklyFueling({ setActiveTab, onOpenVehicleModal }) {
           {/* Cart summary pill button */}
           <button
             onClick={() => setActiveTab('cart')}
-            className="flex items-center justify-between sm:justify-start gap-3 bg-slate-800/90 hover:bg-slate-750 border border-slate-700/80 p-3 px-4 rounded-2xl transition-all group"
+            className="flex items-center justify-between sm:justify-start gap-3 bg-slate-800/90 hover:bg-slate-750 hover:border-emerald-500/40 border border-slate-700/80 p-3 px-4 rounded-2xl transition-all group"
           >
             <div className="w-10 h-10 rounded-xl bg-emerald-600/20 text-emerald-400 flex items-center justify-center shrink-0">
               <ShoppingCart className="w-5 h-5" />
             </div>
             <div className="text-left">
               <span className="text-[11px] text-slate-400 block font-medium">Carrinho da Semana</span>
-              <span className="text-sm font-black text-white group-hover:text-emerald-400 transition-colors">
+              <span className="text-sm font-black text-white group-hover:text-emerald-400 transition-colors whitespace-nowrap">
                 {itemCount} {itemCount === 1 ? 'veículo' : 'veículos'} • R$ {Number(totalCost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </span>
             </div>
@@ -128,7 +128,7 @@ export default function WeeklyFueling({ setActiveTab, onOpenVehicleModal }) {
           <div className="flex items-center justify-between text-xs sm:text-sm">
             <span className="font-bold text-slate-200 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              Progresso do Abastecimento: <strong className="text-emerald-400">{addedCount} de {totalWorkingCount} veículos adicionados</strong>
+              Progresso: <strong className="text-emerald-400">{addedCount} de {totalWorkingCount} {totalWorkingCount === 1 ? 'veículo adicionado' : 'veículos adicionados'}</strong>
             </span>
             <span className="font-black text-emerald-400">{progressPercent}%</span>
           </div>
@@ -147,17 +147,18 @@ export default function WeeklyFueling({ setActiveTab, onOpenVehicleModal }) {
         <div className="relative w-full sm:w-96">
           <input
             type="text"
-            placeholder="🔍 Buscar por nome, modelo ou placa..."
+            placeholder="Buscar por nome, modelo ou placa..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full px-4 py-2.5 pl-10 rounded-2xl bg-slate-900 border border-slate-800 text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500"
           />
-          <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+          <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
           <span className="text-xs text-slate-400">
-            Exibindo apenas veículos 🟢 <strong className="text-slate-200">Funcionando</strong>
+            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1.5 align-middle" />
+            Exibindo apenas veículos <strong className="text-slate-200">funcionando</strong>
           </span>
         </div>
       </div>
@@ -168,7 +169,7 @@ export default function WeeklyFueling({ setActiveTab, onOpenVehicleModal }) {
           <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-emerald-500" />
         </div>
       ) : filteredVehicles.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {filteredVehicles.map((vehicle) => {
             const isAdded = fueledVehicleMap.has(vehicle.id);
             const record = fueledVehicleMap.get(vehicle.id);
@@ -185,6 +186,20 @@ export default function WeeklyFueling({ setActiveTab, onOpenVehicleModal }) {
             );
           })}
         </div>
+      ) : vehicles.length > 0 ? (
+        <div className="p-10 text-center bg-slate-900/60 border border-slate-800 rounded-3xl space-y-3">
+          <Search className="w-10 h-10 text-slate-600 mx-auto" />
+          <h3 className="text-base font-bold text-white">Nenhum veículo encontrado</h3>
+          <p className="text-xs text-slate-400">
+            Nada corresponde a "<span className="text-slate-200">{searchTerm}</span>".
+          </p>
+          <button
+            onClick={() => setSearchTerm('')}
+            className="text-xs font-bold text-emerald-400 hover:text-emerald-300"
+          >
+            Limpar busca
+          </button>
+        </div>
       ) : (
         <div className="p-12 text-center bg-slate-900/60 border border-slate-800 rounded-3xl space-y-4">
           <Fuel className="w-12 h-12 text-slate-600 mx-auto" />
@@ -199,7 +214,7 @@ export default function WeeklyFueling({ setActiveTab, onOpenVehicleModal }) {
               onClick={onOpenVehicleModal}
               className="py-3 px-5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs inline-flex items-center gap-2 shadow-lg shadow-emerald-950/40 transition-all"
             >
-              <Plus className="w-4 h-4 stroke-[3]" /> + Cadastrar primeiro veículo
+              <Plus className="w-4 h-4 stroke-[3]" /> Cadastrar primeiro veículo
             </button>
           )}
         </div>

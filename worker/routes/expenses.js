@@ -1,6 +1,7 @@
 // Expenses Controller for Cloudflare Workers & D1
 import { query, get, run } from '../utils/db.js';
 import { logAudit } from '../utils/audit.js';
+import { todayBR } from '../utils/date.js';
 
 export async function listExpenses(request, env) {
   try {
@@ -59,7 +60,7 @@ export async function createExpense(request, env, user) {
         vehicle_id,
         category,
         description.trim(),
-        date || new Date().toISOString().split('T')[0],
+        date || todayBR(),
         parseFloat(cost),
         km ? parseFloat(km) : null,
         receipt_url || null,
