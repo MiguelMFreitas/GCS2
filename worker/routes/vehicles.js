@@ -1,6 +1,7 @@
 // Vehicles Controller for Cloudflare Workers & D1
 import { query, get, run } from '../utils/db.js';
 import { logAudit } from '../utils/audit.js';
+import { todayBR } from '../utils/date.js';
 
 export async function listVehicles(request, env) {
   try {
@@ -169,7 +170,7 @@ export async function createVehicle(request, env, user) {
         fuel_type_default || 'Diesel S10',
         tank_capacity ? parseFloat(tank_capacity) : 0,
         photo_url || null, notes || null,
-        initialStatus, status_date || new Date().toISOString().split('T')[0],
+        initialStatus, status_date || todayBR(),
         status_reason || null, status_workshop || null, status_return_forecast || null, null,
         isOdometerWorking
       ]
@@ -300,7 +301,7 @@ export async function updateVehicleStatus(request, env, user, id) {
        WHERE id = ?`,
       [
         status,
-        status_date || new Date().toISOString().split('T')[0],
+        status_date || todayBR(),
         status_reason || null,
         status_workshop || null,
         status_return_forecast || null,

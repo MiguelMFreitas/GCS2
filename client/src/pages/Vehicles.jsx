@@ -88,7 +88,7 @@ export default function Vehicles({ onSelectVehicle }) {
         <div className="relative w-full lg:w-96">
           <input
             type="text"
-            placeholder="🔍 Buscar por nome, modelo ou placa..."
+            placeholder="Buscar por nome, modelo ou placa..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full px-4 py-2.5 pl-10 rounded-2xl bg-slate-900 border border-slate-800 text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500"

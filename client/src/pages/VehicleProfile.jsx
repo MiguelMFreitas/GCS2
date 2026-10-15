@@ -31,7 +31,7 @@ import { useAuth } from '../context/AuthContext';
 
 export default function VehicleProfile({ vehicleId, onBack, setActiveTab }) {
   const { user } = useAuth();
-  const isManagerOrSupervisor = user?.role === 'gerente' || user?.role === 'encarregado' || user?.role === 'admin';
+  const isManagerOrSupervisor = ['gerente', 'admin', 'encarregado', 'supervisor'].includes(String(user?.role || '').toLowerCase());
   const { refreshCart } = useFuelingCart();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -333,11 +333,11 @@ export default function VehicleProfile({ vehicleId, onBack, setActiveTab }) {
                   <div className="grid grid-cols-4 gap-2 text-center text-xs">
                     <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800">
                       <span className="text-[10px] text-slate-400 block">Litros</span>
-                      <strong className="text-white">{Number(f.liters).toFixed(2)} L</strong>
+                      <strong className="text-white">{Number(f.liters).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} L</strong>
                     </div>
                     <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800">
                       <span className="text-[10px] text-slate-400 block">Valor</span>
-                      <strong className="text-emerald-400">R$ {Number(f.total_cost).toFixed(2)}</strong>
+                      <strong className="text-emerald-400">R$ {Number(f.total_cost).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                     </div>
                     <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800">
                       <span className="text-[10px] text-slate-400 block">KM Rodados</span>
@@ -350,7 +350,7 @@ export default function VehicleProfile({ vehicleId, onBack, setActiveTab }) {
                   </div>
 
                   <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400 pt-2 border-t border-slate-800/60">
-                    <span>Combustível: <strong className="text-slate-200">{f.fuel_type}</strong> • Preço: R$ {Number(f.price_per_liter || 0).toFixed(2)}/L</span>
+                    <span>Combustível: <strong className="text-slate-200">{f.fuel_type}</strong> • Preço: R$ {Number(f.price_per_liter || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/L</span>
                     <div className="flex items-center gap-1.5 ml-auto">
                       {f.photo_pump_url && (
                         <button

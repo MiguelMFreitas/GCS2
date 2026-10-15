@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { X, CheckCircle2, AlertTriangle, Clock, Ban, Wrench, Calendar, Building, Save } from 'lucide-react';
 import { vehicleService } from '../services/api';
+import { todayLocal } from '../utils/date';
 
 export default function StatusChangeModal({ vehicle, isOpen, onClose, onUpdated }) {
   const [status, setStatus] = useState(vehicle?.status || 'working');
-  const [statusDate, setStatusDate] = useState(new Date().toISOString().split('T')[0]);
+  const [statusDate, setStatusDate] = useState(todayLocal());
   const [statusReason, setStatusReason] = useState(vehicle?.status_reason || '');
   const [statusWorkshop, setStatusWorkshop] = useState(vehicle?.status_workshop || '');
   const [statusReturnForecast, setStatusReturnForecast] = useState(vehicle?.status_return_forecast || '');

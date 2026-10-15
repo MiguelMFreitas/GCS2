@@ -139,14 +139,14 @@ export default function FuelingCart({ setActiveTab, onSessionFinalized }) {
           <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800/80">
             <span className="text-xs font-semibold text-slate-400 block">Veículos Adicionados</span>
             <p className="text-2xl sm:text-3xl font-black text-white mt-1">
-              🛒 {itemCount} {itemCount === 1 ? 'veículo' : 'veículos'}
+              {itemCount} {itemCount === 1 ? 'veículo' : 'veículos'}
             </p>
           </div>
 
           <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800/80">
             <span className="text-xs font-semibold text-slate-400 block">Volume Total de Combustível</span>
             <p className="text-2xl sm:text-3xl font-black text-emerald-400 mt-1">
-              {Number(totalLiters).toFixed(2)} <span className="text-sm font-bold text-slate-400">Litros</span>
+              {Number(totalLiters).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-sm font-bold text-slate-400">Litros</span>
             </p>
           </div>
 
@@ -226,7 +226,7 @@ export default function FuelingCart({ setActiveTab, onSessionFinalized }) {
                         <div>
                           <span className="text-[10px] text-slate-400 block">Litros & Preço/L</span>
                           <span className="font-bold text-white">
-                            {item.liters} L • R$ {Number(item.price_per_liter).toFixed(2)}/L
+                            {Number(item.liters).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L • R$ {Number(item.price_per_liter).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/L
                           </span>
                         </div>
 
@@ -241,7 +241,7 @@ export default function FuelingCart({ setActiveTab, onSessionFinalized }) {
                           <span className="text-[10px] text-slate-400 block">Média Consumo</span>
                           <span className="font-bold text-emerald-300">
                             {hasOdometer && item.consumption_kml
-                              ? `${item.consumption_kml} km/L`
+                              ? `${Number(item.consumption_kml).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} km/L`
                               : <span className="text-slate-400 italic">Não calculado</span>}
                           </span>
                         </div>
@@ -250,6 +250,9 @@ export default function FuelingCart({ setActiveTab, onSessionFinalized }) {
                       {/* Attached Photos thumbnails */}
                       <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-800/60 text-[11px] text-slate-400">
                         <span className="font-semibold">Fotos:</span>
+                        {!item.photo_pump_url && !item.photo_dashboard_url && (
+                          <span className="italic text-slate-500">nenhuma anexada</span>
+                        )}
                         {item.photo_pump_url && (
                           <button
                             onClick={() => setSelectedPhotoZoom(item.photo_pump_url)}
@@ -354,7 +357,7 @@ export default function FuelingCart({ setActiveTab, onSessionFinalized }) {
               </div>
               <div className="flex justify-between text-slate-300">
                 <span>Volume Total:</span>
-                <strong className="text-white">{Number(totalLiters).toFixed(2)} Litros</strong>
+                <strong className="text-white">{Number(totalLiters).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Litros</strong>
               </div>
               <div className="flex justify-between text-slate-300 border-t border-slate-800 pt-2">
                 <span className="font-bold text-white">VALOR TOTAL DO ABASTECIMENTO:</span>

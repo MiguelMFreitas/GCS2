@@ -88,7 +88,7 @@ function MainApp() {
       {activeTab === 'weekly-fueling' && (
         <WeeklyFueling
           setActiveTab={setActiveTab}
-          onOpenVehicleModal={() => isGerente && setGlobalVehicleModalOpen(true)}
+          onOpenVehicleModal={isGerente ? () => setGlobalVehicleModalOpen(true) : undefined}
         />
       )}
 

@@ -39,7 +39,7 @@ import {
 
 export default function Reports() {
   const { user } = useAuth();
-  const isManagerOrSupervisor = user?.role === 'gerente' || user?.role === 'encarregado' || user?.role === 'admin';
+  const isManagerOrSupervisor = ['gerente', 'admin', 'encarregado', 'supervisor'].includes(String(user?.role || '').toLowerCase());
 
   const [records, setRecords] = useState([]);
   const [vehiclesData, setVehiclesData] = useState([]);
@@ -574,7 +574,7 @@ export default function Reports() {
             const avgLitersVal = v.summary.avg_liters || (v.summary.fuelings_count > 0 ? v.summary.total_liters / v.summary.fuelings_count : 0);
             const avgPriceVal = v.summary.avg_price_per_liter || (v.summary.fuelings_count > 0 ? v.records.reduce((s, r) => s + Number(r.price_per_liter || 0), 0) / v.summary.fuelings_count : 0);
             const avgCostVal = v.summary.avg_total_cost || (v.summary.fuelings_count > 0 ? v.summary.total_cost / v.summary.fuelings_count : 0);
-            const avgConsumptionVal = v.summary.avg_consumption_kml ? `${Number(v.summary.avg_consumption_kml).toFixed(2)} km/L` : 'Não disponível';
+            const avgConsumptionVal = v.summary.avg_consumption_kml ? `${Number(v.summary.avg_consumption_kml).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km/L` : 'Não disponível';
 
             return (
               /* DEDICATED RECTANGLE CONTAINER FOR THIS VEHICLE */
@@ -672,7 +672,7 @@ export default function Reports() {
                               <span className="text-[10px] text-emerald-400 block font-bold uppercase">Total & Média</span>
                               <strong className="text-emerald-400 font-black block mt-0.5">{formatCurrency(r.total_cost)}</strong>
                               <span className="text-[10px] font-semibold text-emerald-300 block mt-0.5">
-                                {hasOd && r.consumption_kml ? `${Number(r.consumption_kml).toFixed(2)} km/L` : '—'}
+                                {hasOd && r.consumption_kml ? `${Number(r.consumption_kml).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km/L` : '—'}
                               </span>
                             </div>
                           </div>
@@ -744,7 +744,7 @@ export default function Reports() {
                         <div key={w.week_key} className="bg-slate-900 px-3 py-1.5 rounded-xl text-xs border border-slate-800 flex items-center gap-2">
                           <span className="text-slate-400">{w.week_label}:</span>
                           <strong className="text-emerald-400 font-black">
-                            {w.avg_consumption_kml ? `${Number(w.avg_consumption_kml).toFixed(2)} km/L` : '—'}
+                            {w.avg_consumption_kml ? `${Number(w.avg_consumption_kml).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km/L` : '—'}
                           </strong>
                         </div>
                       ))}

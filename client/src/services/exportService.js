@@ -1,5 +1,6 @@
 import jsPDFModule from 'jspdf';
 import * as XLSX from 'xlsx';
+import { todayLocal } from '../utils/date';
 
 const jsPDF = jsPDFModule.jsPDF || jsPDFModule;
 
@@ -18,7 +19,7 @@ export function formatLiters(value) {
 
 export function formatKm(value) {
   if (value === null || value === undefined || isNaN(value)) return '-';
-  return `${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km`;
+  return `${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 1 })} km`;
 }
 
 export function formatConsumption(value) {
@@ -764,7 +765,7 @@ export async function sharePDF(doc, filename, title = 'Relatório de Abastecimen
 // High-Level Session, Fleet & Individual PDF Generation Functions
 // ==============================================================================
 export function generateSessionPDF(session, records = [], summary = {}, action = 'download') {
-  const dateFormatted = session.date ? session.date.replace(/-/g, '_') : new Date().toISOString().split('T')[0];
+  const dateFormatted = session.date ? session.date.replace(/-/g, '_') : todayLocal();
   const filename = `Gerenciamento_Frota_Relatorio_Semanal_${session.code || dateFormatted}.pdf`;
 
   const doc = createFleetPDFDoc({
@@ -825,8 +826,8 @@ export function generateFleetReportPDF({ filters = {}, records = [], vehicles_da
     reportType,
     title: reportTitle,
     sessionCode: null,
-    periodStr: filterSubtitleParts.length ? filterSubtitleParts.join(' • ') : formatDateBR(new Date().toISOString().split('T')[0]),
-    dateStr: new Date().toISOString().split('T')[0],
+    periodStr: filterSubtitleParts.length ? filterSubtitleParts.join(' • ') : formatDateBR(todayLocal()),
+    dateStr: todayLocal(),
     records,
     vehicles_data,
     summary: {
@@ -895,7 +896,7 @@ export function generateSessionExcel(session, records = [], summary) {
 
 export function generateFleetExcelReport({ filters = {}, records = [], vehicles_data = null, summary = {} }) {
   const vehiclesList = ensureVehiclesData(records, vehicles_data);
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = todayLocal();
 
   // 1. Grouped Vehicle Rows with headers and averages
   const vehicleRows = [];

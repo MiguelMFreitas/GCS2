@@ -81,6 +81,20 @@ export default {
   }
 };
 
+const ROTAS_FUNCIONARIO = new Set([
+  'GET /api/auth/me',
+  'POST /api/auth/change-password',
+  'POST /api/auth/password',
+  'POST /api/upload',
+  'GET /api/fueling/pending-vehicles',
+  'POST /api/fueling/submit'
+]);
+
+function isGerenteOuEncarregado(user) {
+  const role = String(user?.role || '').toLowerCase().trim();
+  return ['admin', 'gerente', 'encarregado', 'supervisor'].includes(role);
+}
+
 async function handleApiRoute(request, env, pathname, method) {
   // Public Routes (No auth required)
   if (method === 'POST' && pathname === '/api/auth/login') {
@@ -109,6 +123,12 @@ async function handleApiRoute(request, env, pathname, method) {
 
   if (!user) {
     return Response.json({ error: 'Acesso negado. Sessão inválida ou ausente.' }, { status: 401 });
+  }
+
+  // Funcionário só usa a tela de abastecimento: a API precisa barrar o resto,
+  // não apenas a interface (senão ele poderia apagar veículos, sessões etc. pela API).
+  if (!isGerenteOuEncarregado(user) && !ROTAS_FUNCIONARIO.has(`${method} ${pathname}`)) {
+    return Response.json({ error: 'Acesso negado. Seu perfil não tem permissão para esta ação.' }, { status: 403 });
   }
 
   // --- Authenticated User Profile & Password ---

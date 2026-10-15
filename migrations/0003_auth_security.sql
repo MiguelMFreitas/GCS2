@@ -4,7 +4,8 @@
 -- ==============================================================================
 
 -- Garante que o índice único de username exista
-ALTER TABLE users ADD COLUMN username TEXT;
+-- (a coluna username já é criada em 0001_initial_schema.sql; um ALTER TABLE aqui
+--  quebrava a criação de bancos novos com "duplicate column name: username")
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username);
 
 -- Garante a inserção do administrador 'gerente' com senha armazenada em hash bcrypt

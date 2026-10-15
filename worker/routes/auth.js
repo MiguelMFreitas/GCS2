@@ -20,7 +20,7 @@ export async function login(request, env) {
 
     const user = await get(
       env.DB,
-      'SELECT * FROM users WHERE (username = ? OR email = ?) AND active = 1',
+      'SELECT * FROM users WHERE (username = ? OR LOWER(email) = LOWER(?)) AND active = 1',
       [identifier, identifier]
     );
 

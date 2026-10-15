@@ -13,6 +13,7 @@ import {
   ShieldAlert
 } from 'lucide-react';
 import { expenseService, maintenanceService, vehicleService, uploadService } from '../services/api';
+import { todayLocal } from '../utils/date';
 
 export default function Expenses() {
   const [activeTab, setActiveTab] = useState('expenses');
@@ -30,7 +31,7 @@ export default function Expenses() {
     vehicle_id: '',
     category: 'Troca de Óleo',
     description: '',
-    date: new Date().toISOString().split('T')[0],
+    date: todayLocal(),
     cost: '',
     km: '',
     receipt_url: '',
@@ -43,7 +44,7 @@ export default function Expenses() {
     problem: '',
     service: '',
     workshop: '',
-    entry_date: new Date().toISOString().split('T')[0],
+    entry_date: todayLocal(),
     exit_date: '',
     km: '',
     cost: '',

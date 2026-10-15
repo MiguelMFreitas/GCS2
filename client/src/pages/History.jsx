@@ -29,7 +29,7 @@ import { generateSessionPDF, formatDateBR, formatCurrency, formatLiters, formatK
 
 export default function History({ onSelectSession }) {
   const { user } = useAuth();
-  const isManagerOrSupervisor = user?.role === 'gerente' || user?.role === 'encarregado' || user?.role === 'admin';
+  const isManagerOrSupervisor = ['gerente', 'admin', 'encarregado', 'supervisor'].includes(String(user?.role || '').toLowerCase());
 
   const [records, setRecords] = useState([]);
   const [sessions, setSessions] = useState([]);
@@ -165,7 +165,7 @@ export default function History({ onSelectSession }) {
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
           >
-            📋 Todos os Abastecimentos Individuais ({records.length})
+            Abastecimentos ({records.length})
           </button>
           <button
             onClick={() => {
@@ -178,7 +178,7 @@ export default function History({ onSelectSession }) {
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
           >
-            📅 Sessões Semanais ({sessions.length})
+            Sessões semanais ({sessions.length})
           </button>
         </div>
       </div>
@@ -188,7 +188,7 @@ export default function History({ onSelectSession }) {
         <div className="relative w-full sm:w-96">
           <input
             type="text"
-            placeholder="🔍 Buscar por veículo, placa, data, combustível ou ID..."
+            placeholder="Buscar por veículo, placa, data, combustível ou ID..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full px-4 py-2.5 pl-10 rounded-2xl bg-slate-900 border border-slate-800 text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500"
@@ -366,7 +366,7 @@ export default function History({ onSelectSession }) {
                       <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
                         <span className="text-[10px] text-slate-400 block">Veículos & Litros</span>
                         <strong className="text-white block mt-0.5">
-                          🚚 {session.total_vehicles || 0} veíc. • {Number(session.total_liters || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} L
+                          {session.total_vehicles || 0} {Number(session.total_vehicles) === 1 ? 'veículo' : 'veículos'} • {Number(session.total_liters || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} L
                         </strong>
                       </div>
 
@@ -386,7 +386,7 @@ export default function History({ onSelectSession }) {
                         className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-bold flex items-center gap-1.5 transition-colors border border-slate-700/60 cursor-pointer"
                       >
                         <FileText className="w-3.5 h-3.5 text-rose-400" />
-                        {generatingPdfId === session.id ? 'Gerando...' : '📄 Ver PDF'}
+                        {generatingPdfId === session.id ? 'Gerando...' : 'Ver PDF'}
                       </button>
 
                       <span className="text-xs font-bold text-emerald-400 group-hover:text-emerald-300 flex items-center gap-1">
@@ -508,7 +508,7 @@ export default function History({ onSelectSession }) {
                       <div className="flex justify-between">
                         <span className="text-slate-400">Custo / KM:</span>
                         <strong className="text-blue-400">
-                          {selectedRecord.cost_per_km ? `R$ ${Number(selectedRecord.cost_per_km).toFixed(2)}/km` : '—'}
+                          {selectedRecord.cost_per_km ? `R$ ${Number(selectedRecord.cost_per_km).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/km` : '—'}
                         </strong>
                       </div>
                     </div>

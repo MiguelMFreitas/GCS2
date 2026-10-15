@@ -1,12 +1,36 @@
 // Fueling Sessions & Cart Flow Controller for Cloudflare Workers & D1
 import { query, get, run } from '../utils/db.js';
 import { logAudit } from '../utils/audit.js';
+import { todayBR, getMondayAndSunday } from '../utils/date.js';
 
 async function generateSessionCode(db, dateStr) {
-  const date = dateStr || new Date().toISOString().split('T')[0];
+  const date = dateStr || todayBR();
   const countObj = await get(db, 'SELECT COUNT(id) as count FROM fueling_sessions WHERE date = ?', [date]);
   const seq = String((countObj?.count || 0) + 1).padStart(3, '0');
   return `ABAST-${date}-${seq}`;
+}
+
+// Recalcula KM rodado, consumo e custo/km a partir dos valores atuais do registro.
+// Sem isso, editar KM ou litros deixava os valores antigos gravados.
+function computeKmMetrics(kmPrevious, kmCurrent, liters, totalCost) {
+  const prev = kmPrevious !== null && kmPrevious !== undefined ? Number(kmPrevious) : null;
+  const curr = kmCurrent !== null && kmCurrent !== undefined && !isNaN(kmCurrent) ? Number(kmCurrent) : null;
+
+  if (prev === null || curr === null) {
+    return { kmDriven: null, consumptionKml: null, costPerKm: null };
+  }
+  if (curr < prev) {
+    return {
+      error: `A quilometragem atual (${curr.toLocaleString('pt-BR')} km) não pode ser menor que a anterior (${prev.toLocaleString('pt-BR')} km).`
+    };
+  }
+
+  const kmDriven = curr - prev;
+  return {
+    kmDriven,
+    consumptionKml: liters > 0 ? parseFloat((kmDriven / liters).toFixed(2)) : null,
+    costPerKm: kmDriven > 0 ? parseFloat((totalCost / kmDriven).toFixed(2)) : null
+  };
 }
 
 export async function getActiveSession(request, env) {
@@ -48,7 +72,7 @@ export async function createOrStartSession(request, env, user) {
   try {
     const body = await request.json().catch(() => ({}));
     const { date, notes } = body;
-    const sessionDate = date || new Date().toISOString().split('T')[0];
+    const sessionDate = date || todayBR();
 
     // Check if there is already an active session
     const existing = await get(
@@ -199,6 +223,11 @@ export async function addRecordToCart(request, env, user, sessionId) {
 
       if (lastFuel && lastFuel.km_current) {
         kmPrevious = parseFloat(lastFuel.km_current);
+        if (kmCurrent < kmPrevious) {
+          return Response.json({
+            error: `A quilometragem atual (${kmCurrent.toLocaleString('pt-BR')} km) não pode ser menor que a anterior (${kmPrevious.toLocaleString('pt-BR')} km).`
+          }, { status: 400 });
+        }
         if (kmCurrent >= kmPrevious) {
           kmDriven = kmCurrent - kmPrevious;
           if (numLiters > 0) {
@@ -283,15 +312,11 @@ export async function updateRecordInCart(request, env, user, sessionId, recordId
       if (km_current !== undefined) {
         kmCurrent = parseFloat(km_current);
       }
-      if (kmPrevious && kmCurrent && kmCurrent >= kmPrevious) {
-        kmDriven = kmCurrent - kmPrevious;
-        if (numLiters > 0) {
-          consumptionKml = parseFloat((kmDriven / numLiters).toFixed(2));
-        }
-        if (kmDriven > 0) {
-          costPerKm = parseFloat((calculatedTotal / kmDriven).toFixed(2));
-        }
+      const metrics = computeKmMetrics(kmPrevious, kmCurrent, numLiters, calculatedTotal);
+      if (metrics.error) {
+        return Response.json({ error: metrics.error }, { status: 400 });
       }
+      ({ kmDriven, consumptionKml, costPerKm } = metrics);
     }
 
     await run(
@@ -531,34 +556,6 @@ function normalizeFuelCategory(fuelType) {
   return fuelType || 'Outro';
 }
 
-function getMondayAndSunday(dateStr) {
-  let targetDate;
-  if (dateStr) {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    targetDate = new Date(y, m - 1, d, 12, 0, 0);
-  } else {
-    targetDate = new Date();
-  }
-  const day = targetDate.getDay();
-  const diffToMonday = day === 0 ? -6 : 1 - day;
-  const monday = new Date(targetDate);
-  monday.setDate(targetDate.getDate() + diffToMonday);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-
-  const formatYMD = (d) => {
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const dateNum = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${dateNum}`;
-  };
-
-  return {
-    startDate: formatYMD(monday),
-    endDate: formatYMD(sunday)
-  };
-}
-
 export async function getPendingVehiclesForEmployee(request, env) {
   try {
     const { startDate, endDate } = getMondayAndSunday();
@@ -568,11 +565,8 @@ export async function getPendingVehiclesForEmployee(request, env) {
       `SELECT DISTINCT fr.vehicle_id
        FROM fuel_records fr
        LEFT JOIN fueling_sessions fs ON fr.session_id = fs.id
-       WHERE (
-         (date(fr.created_at) >= ? AND date(fr.created_at) <= ?)
-         OR (fs.date IS NOT NULL AND fs.date >= ? AND fs.date <= ?)
-       )`,
-      [startDate, endDate, startDate, endDate]
+       WHERE COALESCE(NULLIF(fs.date, ''), date(fr.created_at, '-3 hours')) BETWEEN ? AND ?`,
+      [startDate, endDate]
     );
 
     const fueledVehicleIds = new Set(fueledThisWeek.map(r => r.vehicle_id));
@@ -640,11 +634,9 @@ export async function submitEmployeeFueling(request, env, user) {
       env.DB,
       `SELECT fr.id FROM fuel_records fr
        LEFT JOIN fueling_sessions fs ON fr.session_id = fs.id
-       WHERE fr.vehicle_id = ? AND (
-         (date(fr.created_at) >= ? AND date(fr.created_at) <= ?)
-         OR (fs.date IS NOT NULL AND fs.date >= ? AND fs.date <= ?)
-       )`,
-      [vehicle_id, startDate, endDate, startDate, endDate]
+       WHERE fr.vehicle_id = ?
+         AND COALESCE(NULLIF(fs.date, ''), date(fr.created_at, '-3 hours')) BETWEEN ? AND ?`,
+      [vehicle_id, startDate, endDate]
     );
 
     if (existingThisWeek) {
@@ -654,7 +646,11 @@ export async function submitEmployeeFueling(request, env, user) {
     const parseNumeric = (val) => {
       if (val === null || val === undefined || val === '') return NaN;
       if (typeof val === 'number') return val;
-      const str = String(val).replace(/[R$\sLkm]/g, '').replace(',', '.');
+      let str = String(val).replace(/[R$\sLkm]/g, '');
+      // Formato brasileiro "1.234,56": remove o separador de milhar antes de trocar a vírgula
+      if (str.includes(',')) str = str.replace(/\./g, '').replace(',', '.');
+      // Só pontos de milhar, como "266.251" km
+      else if (/^\d{1,3}(\.\d{3})+$/.test(str)) str = str.replace(/\./g, '');
       return parseFloat(str);
     };
 
@@ -688,7 +684,7 @@ export async function submitEmployeeFueling(request, env, user) {
         return Response.json({ error: 'A quilometragem atual é obrigatória para este veículo.' }, { status: 400 });
       }
       if (!dashPhoto) {
-        return Response.json({ error: 'A foto do painel é obrigatória para este veículo.' });
+        return Response.json({ error: 'A foto do painel é obrigatória para este veículo.' }, { status: 400 });
       }
     }
 
@@ -705,6 +701,11 @@ export async function submitEmployeeFueling(request, env, user) {
       );
       if (lastFuel && lastFuel.km_current) {
         kmPrevious = parseFloat(lastFuel.km_current);
+        if (numKmCurrent < kmPrevious) {
+          return Response.json({
+            error: `A quilometragem atual (${numKmCurrent.toLocaleString('pt-BR')} km) não pode ser menor que a anterior (${kmPrevious.toLocaleString('pt-BR')} km).`
+          }, { status: 400 });
+        }
         if (numKmCurrent > kmPrevious) {
           kmDriven = numKmCurrent - kmPrevious;
           if (numLiters > 0) {
@@ -715,7 +716,7 @@ export async function submitEmployeeFueling(request, env, user) {
       }
     }
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayBR();
     let session = await get(
       env.DB,
       "SELECT * FROM fueling_sessions WHERE date >= ? AND date <= ? AND status IN ('in_progress', 'draft') ORDER BY id DESC LIMIT 1",
@@ -819,15 +820,11 @@ export async function updateFuelRecordDirect(request, env, user, id) {
       if (km_current !== undefined && km_current !== null) {
         kmCurrent = parseFloat(km_current);
       }
-      if (kmPrevious !== null && kmPrevious !== undefined && kmCurrent !== null && kmCurrent >= kmPrevious) {
-        kmDriven = kmCurrent - kmPrevious;
-        if (numLiters > 0) {
-          consumptionKml = parseFloat((kmDriven / numLiters).toFixed(2));
-        }
-        if (kmDriven > 0) {
-          costPerKm = parseFloat((calculatedTotal / kmDriven).toFixed(2));
-        }
+      const metrics = computeKmMetrics(kmPrevious, kmCurrent, numLiters, calculatedTotal);
+      if (metrics.error) {
+        return Response.json({ error: metrics.error }, { status: 400 });
       }
+      ({ kmDriven, consumptionKml, costPerKm } = metrics);
     } else {
       kmCurrent = null;
       kmDriven = null;

@@ -438,7 +438,7 @@ export default function Dashboard({ setActiveTab, onOpenFuelingModal }) {
                         <span className="text-[10px] text-slate-400 font-mono ml-2 font-normal">({sess.code})</span>
                       </p>
                       <p className="text-[11px] text-slate-400 mt-0.5">
-                        {sess.total_vehicles || 0} veículos • {Number(sess.total_liters || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} L
+                        {sess.total_vehicles || 0} {Number(sess.total_vehicles) === 1 ? 'veículo' : 'veículos'} • {Number(sess.total_liters || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} L
                       </p>
                     </div>
                   </div>

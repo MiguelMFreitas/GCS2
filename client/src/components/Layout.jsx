@@ -31,8 +31,8 @@ export default function Layout({ children, activeTab, setActiveTab, onOpenVehicl
   const navItems = isGerente
     ? [
         { id: 'dashboard', label: 'Início', icon: LayoutDashboard },
-        { id: 'weekly-fueling', label: 'Abastecimento da Semana', icon: Fuel, badge: 'Principal' },
-        { id: 'cart', label: 'Carrinho de Abastecimento', icon: ShoppingCart, count: itemCount },
+        { id: 'weekly-fueling', label: 'Abastecimento', icon: Fuel },
+        { id: 'cart', label: 'Carrinho', icon: ShoppingCart, count: itemCount },
         { id: 'vehicles', label: 'Veículos', icon: Truck },
         { id: 'history', label: 'Histórico', icon: History },
         { id: 'reports', label: 'Relatórios', icon: FileBarChart },
@@ -40,18 +40,19 @@ export default function Layout({ children, activeTab, setActiveTab, onOpenVehicl
         { id: 'settings', label: 'Configurações', icon: Settings },
       ]
     : [
-        { id: 'weekly-fueling', label: 'Início Operacional', icon: Fuel, badge: 'Principal' },
-        { id: 'cart', label: 'Carrinho de Abastecimento', icon: ShoppingCart, count: itemCount },
+        { id: 'weekly-fueling', label: 'Abastecimento', icon: Fuel },
+        { id: 'cart', label: 'Carrinho', icon: ShoppingCart, count: itemCount },
         { id: 'history', label: 'Histórico', icon: History },
         { id: 'reports', label: 'Relatórios', icon: FileBarChart },
       ];
 
   const defaultHome = isGerente ? 'dashboard' : 'weekly-fueling';
+  const roleLabel = isGerente ? 'Gerente' : 'Encarregado';
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col md:flex-row pb-24 md:pb-0">
+    <div className={`min-h-screen bg-slate-950 text-slate-100 flex flex-col md:flex-row md:pb-0 ${itemCount > 0 && activeTab !== 'cart' ? 'pb-24' : ''}`}>
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col w-72 bg-slate-900 border-r border-slate-800 shrink-0 sticky top-0 h-screen overflow-y-auto">
+      <aside className="hidden md:flex flex-col w-64 bg-slate-900/70 border-r border-slate-800/80 shrink-0 sticky top-0 h-screen overflow-y-auto overflow-x-hidden">
         {/* Brand Header: Unified Clickable Area */}
         <div className="p-6 border-b border-slate-800 flex items-center justify-between">
           <button
@@ -63,7 +64,7 @@ export default function Layout({ children, activeTab, setActiveTab, onOpenVehicl
               <Fuel className="w-6 h-6 text-slate-950 stroke-[2.5]" />
             </div>
             <div className="min-w-0">
-              <h1 className="font-bold text-base text-white tracking-tight group-hover:text-emerald-400 transition-colors truncate">
+              <h1 className="font-bold text-[15px] leading-tight text-white tracking-tight group-hover:text-emerald-400 transition-colors truncate">
                 Gerenciamento de Frota
               </h1>
               <p className="text-[11px] text-slate-400 font-medium">Controle & Abastecimento</p>
@@ -72,7 +73,7 @@ export default function Layout({ children, activeTab, setActiveTab, onOpenVehicl
         </div>
 
         {/* Navigation Items */}
-        <nav className="p-4 space-y-1.5 flex-1">
+        <nav className="p-3 space-y-1 flex-1">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -80,19 +81,20 @@ export default function Layout({ children, activeTab, setActiveTab, onOpenVehicl
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-medium transition-all group cursor-pointer ${
+                aria-current={isActive ? 'page' : undefined}
+                className={`relative w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all group cursor-pointer ${
                   isActive
-                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/30'
-                    : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+                    ? 'bg-emerald-500/10 text-white ring-1 ring-inset ring-emerald-500/30 before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:rounded-r-full before:bg-emerald-400'
+                    : 'text-slate-400 hover:bg-slate-800/70 hover:text-white'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <Icon className={`w-5 h-5 transition-colors ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-emerald-400'}`} />
+                  <Icon className={`w-5 h-5 transition-colors ${isActive ? 'text-emerald-400' : 'text-slate-500 group-hover:text-emerald-400'}`} />
                   <span>{item.label}</span>
                 </div>
                 {item.count !== undefined && item.count > 0 && (
                   <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                    isActive ? 'bg-white text-emerald-700' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                    'bg-emerald-500 text-slate-950'
                   }`}>
                     {item.count}
                   </span>
@@ -123,7 +125,7 @@ export default function Layout({ children, activeTab, setActiveTab, onOpenVehicl
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className={`inline-block w-1.5 h-1.5 rounded-full ${isGerente ? 'bg-emerald-400' : 'bg-amber-400'}`} />
                   <p className={`text-[10px] font-bold uppercase tracking-wider ${isGerente ? 'text-emerald-400' : 'text-amber-400'} truncate`}>
-                    {isGerente ? 'Gerente (Total)' : 'Encarregado'}
+                    {roleLabel}
                   </p>
                 </div>
               </div>
@@ -144,10 +146,10 @@ export default function Layout({ children, activeTab, setActiveTab, onOpenVehicl
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Mobile Bar (Requirements 2, 3, 24, 25, 26, 27) */}
-        <header className="md:hidden bg-slate-900 border-b border-slate-800 px-3.5 py-3 flex items-center justify-between sticky top-0 z-30 shadow-md">
+        <header className="md:hidden bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-3.5 py-2.5 flex items-center justify-between sticky top-0 z-30 shadow-md">
           {/* Brand Link + Logo Area */}
           <button
-            onClick={() => setActiveTab('dashboard')}
+            onClick={() => setActiveTab(defaultHome)}
             aria-label="Voltar para página inicial"
             className="flex items-center gap-2.5 text-left cursor-pointer focus:outline-none active:scale-95 transition-transform min-h-[44px] py-1"
           >
@@ -185,7 +187,7 @@ export default function Layout({ children, activeTab, setActiveTab, onOpenVehicl
 
         {/* Mobile Dropdown / Drawer Menu (Requirement 28) */}
         {mobileMenuOpen && (
-          <div className="md:hidden bg-slate-900/95 backdrop-blur-md border-b border-slate-800 p-4 space-y-1.5 z-40 shadow-2xl animate-in slide-in-from-top-2 duration-200">
+          <div className="md:hidden bg-slate-900/95 backdrop-blur-md border-b border-slate-800 p-4 space-y-1.5 z-40 shadow-2xl sticky top-[65px] max-h-[calc(100vh-65px)] overflow-y-auto animate-in slide-in-from-top-2 duration-200">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
@@ -221,9 +223,9 @@ export default function Layout({ children, activeTab, setActiveTab, onOpenVehicl
               <div>
                 <span className="text-xs font-bold text-white block">{user?.name || user?.username || 'Usuário'}</span>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${isGerente ? 'bg-emerald-400' : 'bg-blue-400'}`} />
-                  <span className={`text-[10px] font-bold uppercase tracking-wider ${isGerente ? 'text-emerald-400' : 'text-blue-400'}`}>
-                    {isGerente ? 'Gerente (Total)' : 'Funcionário'}
+                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${isGerente ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${isGerente ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {roleLabel}
                   </span>
                 </div>
               </div>
@@ -261,7 +263,7 @@ export default function Layout({ children, activeTab, setActiveTab, onOpenVehicl
 
       {/* Floating Bottom Cart Bar (Mobile Only - Item 51) */}
       {itemCount > 0 && activeTab !== 'cart' && (
-        <div className="md:hidden fixed bottom-3 left-3 right-3 z-50">
+        <div className="md:hidden fixed bottom-3 left-3 right-3 z-40">
           <button
             onClick={() => setActiveTab('cart')}
             className="w-full bg-emerald-600 hover:bg-emerald-500 text-white p-3.5 rounded-2xl shadow-2xl shadow-emerald-950/80 flex items-center justify-between font-bold border border-emerald-400/30 active:scale-[0.98] transition-transform"
@@ -272,7 +274,7 @@ export default function Layout({ children, activeTab, setActiveTab, onOpenVehicl
               </div>
               <div className="text-left">
                 <p className="text-xs text-emerald-100 uppercase tracking-wider font-semibold">Ver Abastecimento</p>
-                <p className="text-sm font-extrabold text-white">🛒 {itemCount} {itemCount === 1 ? 'veículo adicionado' : 'veículos adicionados'}</p>
+                <p className="text-sm font-extrabold text-white">{itemCount} {itemCount === 1 ? 'veículo adicionado' : 'veículos adicionados'}</p>
               </div>
             </div>
             <div className="text-right flex items-center gap-2">

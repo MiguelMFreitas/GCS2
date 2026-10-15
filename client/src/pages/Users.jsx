@@ -562,7 +562,7 @@ export default function Users() {
                 </div>
 
                 {/* Action Buttons */}
-                <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-1.5">
+                <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-1.5">
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => handleOpenEdit(u)}
@@ -584,6 +584,7 @@ export default function Users() {
                   </div>
 
                   <div className="flex items-center gap-1">
+                    {!isSelf && (
                     <button
                       onClick={() => handleToggleStatus(u)}
                       title={isActive ? 'Desativar acesso deste usuário' : 'Reativar acesso'}
@@ -596,6 +597,7 @@ export default function Users() {
                       {isActive ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
                       <span>{isActive ? 'Desativar' : 'Ativar'}</span>
                     </button>
+                    )}
 
                     {!isSelf && (
                       <button

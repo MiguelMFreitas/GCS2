@@ -1,11 +1,12 @@
 import React from 'react';
-import { Truck, Fuel, CheckCircle2, Clock, AlertTriangle, XCircle, Gauge, Calendar, ShieldCheck, ChevronRight } from 'lucide-react';
+import { Truck, Fuel, CheckCircle2, Clock, AlertTriangle, XCircle, Gauge, Calendar, ShieldCheck, ChevronRight, Pencil } from 'lucide-react';
 
 export function getStatusBadge(status) {
   switch (status) {
     case 'working':
       return {
         label: 'Funcionando / Rodando',
+        short: 'Funcionando',
         badge: '🟢 Funcionando',
         color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
         dot: 'bg-emerald-500'
@@ -13,6 +14,7 @@ export function getStatusBadge(status) {
     case 'stopped':
       return {
         label: 'Parado',
+        short: 'Parado',
         badge: '🔴 Parado',
         color: 'text-rose-400 bg-rose-500/10 border-rose-500/30',
         dot: 'bg-rose-500'
@@ -20,6 +22,7 @@ export function getStatusBadge(status) {
     case 'maintenance':
       return {
         label: 'Em manutenção',
+        short: 'Em manutenção',
         badge: '🟡 Em manutenção',
         color: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
         dot: 'bg-amber-500'
@@ -28,11 +31,21 @@ export function getStatusBadge(status) {
     default:
       return {
         label: 'Inativo',
+        short: 'Inativo',
         badge: '⚫ Inativo',
         color: 'text-slate-400 bg-slate-500/10 border-slate-500/30',
         dot: 'bg-slate-500'
       };
   }
+}
+
+// 'diesel' -> 'Diesel', 'diesel s10' -> 'Diesel S10'
+export function formatFuelType(fuel) {
+  if (!fuel) return 'Diesel';
+  return String(fuel)
+    .toLowerCase()
+    .replace(/\b(s10|s500|gnv)\b/g, (m) => m.toUpperCase())
+    .replace(/(^|\s)\p{L}/gu, (m) => m.toUpperCase());
 }
 
 export default function VehicleCard({
@@ -57,19 +70,19 @@ export default function VehicleCard({
       }`}
     >
       {/* Top row: Status & Weekly Status Badge */}
-      <div className="flex items-center justify-between gap-2 mb-3">
-        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${statusInfo.color}`}>
-          <span className={`w-2 h-2 rounded-full ${statusInfo.dot} animate-pulse`} />
-          {statusInfo.label}
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border whitespace-nowrap ${statusInfo.color}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot}`} />
+          {statusInfo.short}
         </span>
 
         {isWeeklyMode && isWorking && (
           isFueledInCurrentSession ? (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500 text-slate-950 shadow-sm">
-              <CheckCircle2 className="w-3.5 h-3.5" /> Adicionado ao abastecimento
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap bg-emerald-500 text-slate-950 shadow-sm">
+              <CheckCircle2 className="w-3.5 h-3.5" /> Adicionado
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap bg-amber-500/20 text-amber-300 border border-amber-500/30">
               <Clock className="w-3.5 h-3.5" /> Pendente
             </span>
           )
@@ -89,7 +102,7 @@ export default function VehicleCard({
 
         {/* Text info */}
         <div className="min-w-0 flex-1">
-          <h3 className="font-bold text-base text-white group-hover:text-emerald-400 transition-colors truncate">
+          <h3 title={vehicle.name} className="font-bold text-base text-white group-hover:text-emerald-400 transition-colors truncate">
             {vehicle.name}
           </h3>
           <p className="text-xs text-slate-400 truncate">{vehicle.brand} {vehicle.model} {vehicle.version || ''}</p>
@@ -97,19 +110,21 @@ export default function VehicleCard({
           <div className="flex flex-wrap items-center gap-2 mt-2">
             {/* Mercosul Placa */}
             <div className="inline-flex items-center bg-white text-slate-900 px-2 py-0.5 rounded border border-slate-300 font-mono text-xs font-black tracking-wider shadow-sm">
-              <span className="text-[9px] bg-blue-700 text-white px-1 mr-1 rounded-xs">BRA</span>
+              <span className="text-[9px] bg-blue-700 text-white px-1 mr-1 rounded-sm">BRA</span>
               {vehicle.plate}
             </div>
 
             {/* Ano Fab/Mod */}
-            <span className="text-xs font-medium text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded">
-              {vehicle.year_fab}/{vehicle.year_model}
-            </span>
+            {(vehicle.year_fab || vehicle.year_model) && (
+              <span className="text-xs font-medium text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded">
+                {[vehicle.year_fab, vehicle.year_model].filter(Boolean).join('/')}
+              </span>
+            )}
 
             {/* Combustível */}
             <span className="text-xs font-medium text-slate-400 bg-slate-800/50 px-2 py-0.5 rounded flex items-center gap-1">
               <Fuel className="w-3 h-3 text-emerald-400" />
-              {vehicle.fuel_type_default || 'Diesel'}
+              {formatFuelType(vehicle.fuel_type_default)}
             </span>
           </div>
         </div>
@@ -146,9 +161,9 @@ export default function VehicleCard({
                 e.stopPropagation();
                 onFuelClick(vehicle);
               }}
-              className="w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors border border-slate-700/60"
+              className="w-full py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors border border-slate-700/60"
             >
-              ✏️ Editar Abastecimento
+              <Pencil className="w-3.5 h-3.5" /> Editar abastecimento
             </button>
           ) : (
             <button
@@ -157,9 +172,9 @@ export default function VehicleCard({
                 e.stopPropagation();
                 onFuelClick(vehicle);
               }}
-              className="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-emerald-950/40 transition-all"
+              className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-emerald-950/40 transition-all"
             >
-              <Fuel className="w-4 h-4 stroke-[2.5]" /> Abastecer Veículo
+              <Fuel className="w-4 h-4 stroke-[2.5]" /> Abastecer veículo
             </button>
           )}
         </div>
